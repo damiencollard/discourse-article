@@ -74,8 +74,8 @@ the `nice-citation' treatment, if present."
                                  (fill-region (point-min) (point-max)))
                                (save-excursion
                                  (while (< (point) (point-max))
-                                 (insert "> ")
-                                 (forward-line)))
+                                   (insert "> ")
+                                   (forward-line)))
                                ;; Discourse quotes may contain HTML entities.
                                (xml-parse-string))))
               (delete-region beg end)
