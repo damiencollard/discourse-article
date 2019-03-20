@@ -5,7 +5,7 @@ Treatment of Discourse e-mails.
 Discourse e-mails may contain quotes (citations) of the form
 
 ```plain
-    `[quote=\"AUTHOR,...\"]...TEXT...[/quote]`.
+    [quote=\"AUTHOR,...\"]...TEXT...[/quote].
 ```
 
 This module adds a treatment function that replaces such quotes with
@@ -49,6 +49,6 @@ The Discourse treatment can be disabled in article mode by setting
 
 ## TODO
 
-- Fill-wrap paragraphs other than quotes.
+- Fill-wrap paragraphs other than quotes -- use `gnus-article-fill-long-lines`?
 - Do not fill-wrap code blocks inside quotes!
 - Highlighting of code blocks (with `polymode`?).
