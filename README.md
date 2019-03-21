@@ -24,6 +24,8 @@ It can be used in combination with
 [nice-citation](https://github.com/damiencollard/nice-citation) to get
 even nicer looking citations. In that case, the Discourse Article treatment must appear *before* the Nice Citation treatment -- this Usage below
 
+The treatment only applies to Discourse e-mails (detected based on the `From` header containing `@discoursemail.com`).
+
 ## Installation
 
 Copy `discourse-article.el` into a directory that appears in your

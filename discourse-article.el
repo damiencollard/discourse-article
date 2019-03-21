@@ -31,11 +31,18 @@
 
 (require 'gnus-art)
 
+;; TODO: Add variable holding a list of From regexes used to detect whether an e-mail
+;; is from a Discourse forum?
+
 (defun discourse-article--is-discourse ()
   "Return whether an e-mail is from a Discourse forum."
-  (save-excursion
-    (goto-char (point-min))
-    (re-search-forward "^From: .*@discoursemail.com" nil t)))
+  (gnus-with-article-buffer
+    (save-excursion
+      (save-restriction
+        (widen)
+        (article-narrow-to-head)
+        ;; XXX: There must be some gnus- or message- function to get the From header?
+        (re-search-forward "^From: .*@discoursemail.com" nil t)))))
 
 (defun discourse-article-transform-quotes ()
   "Replace Discourse quotes with mail-style citations.
@@ -54,7 +61,7 @@ and highlights the whole with face `gnus-cite-1'.
 Must be added to `gnus-treatment-function-alist' *before*
 the `nice-citation' treatment, if present."
   (interactive)
-  (when t ;; (discourse-article--is-discourse) ;; FIXME
+  (when (discourse-article--is-discourse)
     (let ((inhibit-read-only t)
           (article-fill-column fill-column))
       (with-silent-modifications
