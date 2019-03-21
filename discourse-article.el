@@ -30,12 +30,14 @@
 ;;; Code:
 
 (require 'gnus-art)
+(require 'xml)
 
 ;; TODO: Add variable holding a list of From regexes used to detect whether an e-mail
 ;; is from a Discourse forum?
 
 (defun discourse-article--is-discourse ()
-  "Return whether an e-mail is from a Discourse forum."
+  "Return whether an e-mail is from a Discourse forum.
+Detection is based on the `From` field matching `@discoursemail.com`."
   (gnus-with-article-buffer
     (save-excursion
       (save-restriction
@@ -107,6 +109,87 @@ predicate.  See Info node `(gnus)Customizing Articles' for details."
 ;; and thus it would leave these quotes un-prettified.
 (nconc gnus-treatment-function-alist
              '((discourse-article-treat-quotes discourse-article-transform-quotes)))
+
+(defun discourse-article-space-out-code-blocks ()
+  "Ensure fenced code blocks are separate paragraphs.
+Fenced code blocks are delimited by triple backticks.
+A newline is inserted before and after, if needed."
+  (interactive)
+  (when (discourse-article--is-discourse)
+    ;; Space out the code blocks.
+    (with-silent-modifications
+      (save-excursion
+        (goto-char (point-min))
+        (let ((in-code-block nil))
+          (while (re-search-forward "^```" nil t)
+            (setq in-code-block (not in-code-block))
+            (if in-code-block
+                (save-excursion
+                  (beginning-of-line)
+                  (when (not (looking-back "\n\n"))
+                    (insert "\n")))
+              (when (not (looking-at "\n\n"))
+                (insert "\n")))))))))
+
+(defun discourse-article--count-citation-marks ()
+  "Count citation marks `>` in the current paragraph.
+Assumes it is called right before the paragraph, on an empty
+line, as is typically the case when advancing with
+`forward-paragraph`."
+  (let ((count 0))
+    (save-mark-and-excursion
+      (forward-line) ;; Skip the empty line.
+      (while (and (< (point) (point-max))
+                  (not (looking-at "^$")))
+        (when (looking-at "^ *>")
+          (setq count (1+ count)))
+        (forward-line)))
+    count))
+
+(defun discourse-article-fill-paragraphs ()
+  "Fill all paragraphs except the fenced code blocks and the citations."
+  (interactive)
+  (when (discourse-article--is-discourse)
+    (with-silent-modifications
+      (save-excursion
+        (goto-char (point-min))
+        (while (< (point) (point-max))
+          (when (and (not (looking-at "\n*```"))
+                     (= 0 (discourse-article--count-citation-marks)))
+            (save-excursion
+              (fill-paragraph)))
+          (forward-paragraph))))))
+
+(defun discourse-article-transform-paragraphs ()
+  "Transform an e-mail's paragraphs.
+Applies `discourse-article-space-out-code-blocks' followed by
+`discourse-article-fill-paragraphs'. Refer to the doc of these
+functions for details."
+  (interactive)
+  (discourse-article-space-out-code-blocks)
+  (discourse-article-fill-paragraphs))
+
+(defcustom discourse-article-treat-paragraphs nil
+  "Fill-wrap paragraphs except the fenced code block ones and the citations.
+
+This is *experimental* and may break paragraph formatting, in particular if
+they contain non-fenced code, so it's off by default.
+
+Note that when enabled, the treatment is only performed on e-mails detected as
+coming from a Discourse forum (see `discourse-article--is-discourse').
+
+Valid values are nil, t, `head', `first', `last', an integer or a
+predicate.  See Info node `(gnus)Customizing Articles' for details."
+  :group 'gnus-article-treat
+  :link '(custom-manual "(gnus)Customizing Articles")
+  :type gnus-article-treat-custom)
+(put 'discourse-article-treat-paragraphs 'highlight t)
+
+;; IMPORTANT: Must be done *after* `discourse-article-transform-quotes'.
+;; And like `discourse-article-transform-quotes', it must also be performed
+;; *before* `nice-citation'.
+(nconc gnus-treatment-function-alist
+             '((discourse-article-treat-paragraphs discourse-article-transform-paragraphs)))
 
 (provide 'discourse-article)
 ;;; discourse-article.el ends here

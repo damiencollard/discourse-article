@@ -1,6 +1,13 @@
 # Discourse  articles for Gnus
 
-Treatment of Discourse e-mails.
+Treatment of Discourse e-mails. There are actually 2 independent treatments:
+
+- Quotes
+- Code + paragraphs.
+
+## Quotes -> citations
+
+This treatment is *enabled* by default.
 
 Discourse e-mails may contain quotes (citations) of the form
 
@@ -24,7 +31,23 @@ It can be used in combination with
 [nice-citation](https://github.com/damiencollard/nice-citation) to get
 even nicer looking citations. In that case, the Discourse Article treatment must appear *before* the Nice Citation treatment -- this Usage below
 
-The treatment only applies to Discourse e-mails (detected based on the `From` header containing `@discoursemail.com`).
+This treatment only applies to Discourse e-mails (based on the `From`
+header containing `@discoursemail.com`).
+
+## Code + paragraphs
+
+This treatment is *disabled* by default.
+
+Fenced code blocks, which are delimited by triple backticks (```) are moved
+into separate paragraphs, so as to ease the next treatment: wrapping
+of paragraphs.
+
+Non-code paragraphs are fill-wrapped to `fill-column` columns.
+
+**NOTE**: Code blocks are not highlighted yet.
+
+**NOTE**: If a paragraph contains (non-fenced) code blocks, this will
+likely garble the code, hence its being disabled by default.
 
 ## Installation
 
@@ -46,11 +69,12 @@ In case you want to apply the [nice-citation](https://github.com/damiencollard/n
 
 ## Customization
 
-The Discourse treatment can be disabled in article mode by setting
-`discourse-article-treat-quotes` in group `gnus-article-treat` to nil.
+- The quotes treatment can be disabled by setting `discourse-article-treat-quotes` to nil.
+- The code + paragraphs treatment can be enabled by setting `discourse-article-treat-paragraphs` to t.
+
+Both settings are in group `gnus-article-treat`.
 
 ## TODO
 
-- Fill-wrap paragraphs other than quotes -- use `gnus-article-fill-long-lines`?
-- Do not fill-wrap code blocks inside quotes!
 - Highlighting of code blocks (with `polymode`?).
+- Buttonification of labeled links (of the form `[label](url)`).
