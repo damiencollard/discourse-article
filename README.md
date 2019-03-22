@@ -67,7 +67,7 @@ and making it clickable. Clicking it follows the specified URL.
 
 ### Previous replies
 
-This treatment is *enabled* by default.
+This treatment is *disabled* by default.
 
 If in your Discourse Emails settings you enabled to include previous
 replies at the bottom of each e-mail you receive, then this treatment,
@@ -98,7 +98,7 @@ In case you want to apply the [nice-citation](https://github.com/damiencollard/n
 
 - The Quotes treatment can be disabled by setting `discourse-article-treat-quotes` to nil.
 - The Code + Paragraphs treatment can be enabled by setting `discourse-article-treat-paragraphs` to t.
-- The Previous Replies treatment can be disabled by setting `discourse-article-treat-previous-replies` to nil.
+- The Previous Replies treatment can be enabled by setting `discourse-article-treat-previous-replies` to t.
 
 - The delimiter strings, the faces for the delimiters, the replies
   heading and the replies' authors can be customized.
