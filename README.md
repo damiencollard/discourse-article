@@ -107,4 +107,3 @@ All these settings are in group `discourse-article`. The treatment variables are
 ## TODO
 
 - Highlighting of code blocks (with `polymode`?).
-- Buttonification of labeled links (of the form `[label](url)`).
