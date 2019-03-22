@@ -7,9 +7,13 @@ Treatment of Discourse e-mails. There are actually 2 independent treatments:
 - Labeled Links
 - Previous Replies.
 
-Here's how it looks (combined with [nice-citation](https://github.com/damiencollard/nice-citation)):
+Here's how it looks:
 
-![Prettified Discourse article](images/discourse-article.png?raw=true "Prettified Discourse article")
+Standard | With treatment
+:-------:|:-----------------:
+![Standard](images/discourse-article-before.png?raw=true "Standard")  | ![After](images/discourse-article-after.png?raw=true "With discourse-article")
+
+And it looks even better combined with [Nice Citation](https://github.com/damiencollard/nice-citation): [screenshot](images/discourse-article-after-with-nice-citation.png).
 
 ## Treatments
 
@@ -35,12 +39,13 @@ regular e-mail citation format as follows:
 
 and highlights the whole with face `gnus-cite-1`.
 
-It can be used in combination with
-[nice-citation](https://github.com/damiencollard/nice-citation) to get
-even nicer looking citations. In that case, the Discourse Article treatment must appear *before* the Nice Citation treatment -- this Usage below
-
 This treatment only applies to Discourse e-mails (based on the `From`
 header containing `@discoursemail.com`).
+
+When used in combination with
+[Nice Citation](https://github.com/damiencollard/nice-citation) (to
+get even nicer looking citations), the Discourse Article treatment
+must appear *before* the Nice Citation treatment -- see Usage below.
 
 ### Code + paragraphs
 
@@ -87,7 +92,8 @@ Emacs' `load-path`.
 (require 'discourse-article)
 ```
 
-In case you want to apply the [nice-citation](https://github.com/damiencollard/nice-citation) treatment too, require it *after* `discourse-article`:
+In case you want to apply the [`nice-citation`](https://github.com/damiencollard/nice-citation)
+treatment too, require it *after* `discourse-article`:
 
 ```lisp
 (require 'discourse-article)
