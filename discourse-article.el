@@ -4,7 +4,7 @@
 
 ;; Author: Damien Collard <damien.collard@laposte.net>
 ;; URL:
-;; Version: 0.0.1
+;; Version: 0.0.2
 ;; Keywords: gnus mail convenience
 ;; Package-Requires: ((emacs "24.3") (gnus "5.13"))
 
@@ -32,6 +32,44 @@
 (require 'gnus-art)
 (require 'xml)
 
+(defgroup discourse-article nil
+  "Treatments for Discourse articles."
+  :prefix "discourse-article-"
+  :group 'gnus-article
+  :link '(url-link :tag "GitHub" "https://github.com/damiencollard/discourse-article"))
+
+(defcustom discourse-article-replies-beginning-delimiter "━"
+  "String used to mark the beginning of previous replies.
+This variable is used by `discourse-article-transform-previous-replies' which can
+be controlled by `discourse-article-treat-previous-replies'."
+  :group 'discourse-article
+  :type '(choice (item :tag "None" :value nil)
+		 string))
+
+(defcustom discourse-article-inter-reply-delimiter "─"
+  "String used to separate replies.
+This variable is used by `discourse-article-transform-previous-replies' which can
+be controlled by `discourse-article-treat-previous-replies'."
+  :group 'discourse-article
+  :type '(choice (item :tag "None" :value nil)
+		 string))
+
+(defface discourse-article-replies-delimiter-face
+  '((t (:foreground "#464646")))
+  "Face for the replies delimiters.
+Applies to both the beginning and inter-reply delimiters."
+  :group 'discourse-article)
+
+(defface discourse-article-replies-heading-face
+  '((t (:foreground "#e0e28c")))
+  "Face for the replies heading text."
+  :group 'discourse-article)
+
+(defface discourse-article-reply-author-face
+  '((t (:inherit gnus-header-from)))
+  "Face for the replies' authors."
+  :group 'discourse-article)
+
 ;; TODO: Add variable holding a list of From regexes used to detect whether an e-mail
 ;; is from a Discourse forum?
 
@@ -45,6 +83,60 @@ Detection is based on the `From` field matching `@discoursemail.com`."
         (article-narrow-to-head)
         ;; XXX: There must be some gnus- or message- function to get the From header?
         (re-search-forward "^From: .*@discoursemail.com" nil t)))))
+
+(defun discourse-article-transform-previous-replies ()
+  (interactive)
+  (when (discourse-article--is-discourse)
+    (let ((inhibit-read-only t)
+          (start-sep (discourse-article--make-separator
+                      discourse-article-replies-beginning-delimiter
+                      'discourse-article-replies-delimiter-face))
+          (reply-sep (discourse-article--make-separator
+                      discourse-article-inter-reply-delimiter
+                      'discourse-article-replies-delimiter-face)))
+      (with-silent-modifications
+        (save-excursion
+          (goto-char (point-min))
+          (when (re-search-forward "^-- \n[*]Previous Replies[*]" nil t)
+            (replace-match
+             (concat start-sep
+                     "\n"
+                     (propertize "Previous Replies" 'face 'discourse-article-replies-heading-face)
+                     "\n"
+                     start-sep
+                     "\n"))
+            (while (re-search-forward "^\\(Posted by \\([^ ]+\\) .*\\)$" nil t)
+              (let ((beg (match-beginning 0))
+                    (end (match-end 0)))
+                (put-text-property beg end 'face 'discourse-article-reply-author-face)
+                )
+              (insert (concat "\n" reply-sep "\n")))))))))
+
+(defun discourse-article--make-separator (delim face)
+  (propertize (discourse-article--make-separator-raw delim) 'face face))
+
+;; Adapted from `gnus-article-treat-body-boundary'.
+(defun discourse-article--make-separator-raw (delim)
+  (when (> (length delim) 0)
+    (let ((max (window-width))
+          str)
+      (while (>= max (length str))
+	(setq str (concat str delim)))
+      (substring str 0 max))))
+
+(defcustom discourse-article-treat-previous-replies nil
+  "Treat the previous replies included in the Discourse e-mail.
+
+No need to enable this treatment if your Discourse settings don't include
+previous replies at the bottom of each e-mail.
+
+Valid values are nil, t, `head', `first', `last', an integer or a
+predicate.  See Info node `(gnus)Customizing Articles' for details."
+  :group 'discourse-article
+  :group 'gnus-article-treat
+  :link '(custom-manual "(gnus)Customizing Articles")
+  :type gnus-article-treat-custom)
+(put 'discourse-article-treat-previous-replies 'highlight t)
 
 (defun discourse-article-transform-quotes ()
   "Replace Discourse quotes with mail-style citations.
@@ -99,16 +191,11 @@ the `nice-citation' treatment, if present."
   "Replace Discourse-style quotes with mail-style ones.
 Valid values are nil, t, `head', `first', `last', an integer or a
 predicate.  See Info node `(gnus)Customizing Articles' for details."
+  :group 'discourse-article
   :group 'gnus-article-treat
   :link '(custom-manual "(gnus)Customizing Articles")
   :type gnus-article-treat-custom)
 (put 'discourse-article-treat-quotes 'highlight t)
-
-;; IMPORTANT: Must be done *before* `nice-citation' (if present) does the same
-;; as otherwise nice-citation would run before the Discourse quotes treatment
-;; and thus it would leave these quotes un-prettified.
-(nconc gnus-treatment-function-alist
-             '((discourse-article-treat-quotes discourse-article-transform-quotes)))
 
 (defun discourse-article-space-out-code-blocks ()
   "Ensure fenced code blocks are separate paragraphs.
@@ -130,6 +217,46 @@ A newline is inserted before and after, if needed."
                     (insert "\n")))
               (when (not (looking-at "\n\n"))
                 (insert "\n")))))))))
+
+(defun discourse-article-transform-links ()
+  "Make Discourse links clickable.
+
+A Discourse link has the form:
+
+    [LABEL](URL)
+
+This function replaces such a link with: LABEL, where LABEL is
+highlighted with the `link' face and when clicked, follows the
+link to URL.
+
+As a consequence, the paragraph may need to be re-filled. Hence
+this treatment should be applied before
+`discourse-article-fill-paragraphs'."
+       (interactive)
+       (when (discourse-article--is-discourse)
+         (let ((inhibit-read-only t))
+           (with-silent-modifications
+             (save-excursion
+               (goto-char (point-min))
+               (while (re-search-forward "\\[\\([^\]]+\\)\\](\\([^)]+\\))" nil t)
+                 (let* ((beg (match-beginning 0))
+                        (end (match-end 0))
+                        (label (match-string 1))
+                        (cleaned-label (replace-regexp-in-string "\n" " " label))
+                        (url (match-string 2)))
+                   (delete-region beg end)
+                   (insert (propertize cleaned-label 'face 'link 'url url))
+                   ;; FIXME: Fix "widget-tabable-at: Wrong type argument: consp, #<overlay ...>"
+                   ;; when TAB'ing to the button and clicking on it (RET does work, though).
+                   (make-button beg (point) 'face 'link
+                                'help-echo (concat "Go to " url)
+                                'url url
+                                'action 'discourse-article--follow-link)
+                   )))))))
+
+(defun discourse-article--follow-link (ovl)
+  (let ((url (overlay-get ovl 'url)))
+    (gnus-button-embedded-url url)))
 
 (defun discourse-article--count-citation-marks ()
   "Count citation marks `>` in the current paragraph.
@@ -167,6 +294,7 @@ Applies `discourse-article-space-out-code-blocks' followed by
 functions for details."
   (interactive)
   (discourse-article-space-out-code-blocks)
+  (discourse-article-transform-links)
   (discourse-article-fill-paragraphs))
 
 (defcustom discourse-article-treat-paragraphs nil
@@ -180,16 +308,25 @@ coming from a Discourse forum (see `discourse-article--is-discourse').
 
 Valid values are nil, t, `head', `first', `last', an integer or a
 predicate.  See Info node `(gnus)Customizing Articles' for details."
+  :group 'discourse-article
   :group 'gnus-article-treat
   :link '(custom-manual "(gnus)Customizing Articles")
   :type gnus-article-treat-custom)
 (put 'discourse-article-treat-paragraphs 'highlight t)
 
-;; IMPORTANT: Must be done *after* `discourse-article-transform-quotes'.
-;; And like `discourse-article-transform-quotes', it must also be performed
-;; *before* `nice-citation'.
+;; IMPORTANT:
+;;
+;; - The Discourse treatments *must* appear in the following order: transform
+;;   previous replies, transform quotes, and then transform paragraphs.
+;;
+;; - These treatments *must* also appear *before* the `nice-citation'
+;;   treatment, if present (as otherwise, `nice-citation' would run before the
+;;   Discourse quotes treatment and thus would leave these quotes
+;;   un-prettified).
 (nconc gnus-treatment-function-alist
-             '((discourse-article-treat-paragraphs discourse-article-transform-paragraphs)))
+       '((discourse-article-treat-previous-replies discourse-article-transform-previous-replies)
+         (discourse-article-treat-quotes discourse-article-transform-quotes)
+         (discourse-article-treat-paragraphs discourse-article-transform-paragraphs)))
 
 (provide 'discourse-article)
 ;;; discourse-article.el ends here

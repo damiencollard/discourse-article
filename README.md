@@ -3,7 +3,13 @@
 Treatment of Discourse e-mails. There are actually 2 independent treatments:
 
 - Quotes
-- Code + paragraphs.
+- Code + Paragraphs
+- Labeled Links
+- Previous Replies.
+
+Here's how it looks (combined with [nice-citation](https://github.com/damiencollard/nice-citation)):
+
+![Prettified Discourse article](images/discourse-article.png?raw=true "Prettified Discourse article")
 
 ## Quotes -> citations
 
@@ -49,6 +55,25 @@ Non-code paragraphs are fill-wrapped to `fill-column` columns.
 **NOTE**: If a paragraph contains (non-fenced) code blocks, this will
 likely garble the code, hence its being disabled by default.
 
+## Labeled links
+
+This treatment is *enabled* by default.
+
+The Labeled Links treatment transforms Discourse links of the form
+`[label](url)` by keeping only the label highlighted with the `link` face
+and making it clickable. Clicking it follows the specified URL.
+
+## Previous replies
+
+This treatment is *enabled* by default.
+
+If in your Discourse Emails settings you enabled to include previous
+replies at the bottom of each e-mail you receive, then this treatment,
+if not perfect, improves readability quite a bit.
+
+It adds separators between replies and highlights the names of the
+replies' authors.
+
 ## Installation
 
 Copy `discourse-article.el` into a directory that appears in your
@@ -69,10 +94,15 @@ In case you want to apply the [nice-citation](https://github.com/damiencollard/n
 
 ## Customization
 
-- The quotes treatment can be disabled by setting `discourse-article-treat-quotes` to nil.
-- The code + paragraphs treatment can be enabled by setting `discourse-article-treat-paragraphs` to t.
+- The Quotes treatment can be disabled by setting `discourse-article-treat-quotes` to nil.
+- The Code + Paragraphs treatment can be enabled by setting `discourse-article-treat-paragraphs` to t.
+- The Previous Replies treatment can be disabled by setting `discourse-article-treat-previous-replies` to nil.
 
-Both settings are in group `gnus-article-treat`.
+- The delimiter strings, the faces for the delimiters, the replies
+  heading and the replies' authors can be customized.
+
+All these settings are in group `discourse-article`. The treatment variables are in
+`gnus-article-treat` as well.
 
 ## TODO
 
