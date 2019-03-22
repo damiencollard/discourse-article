@@ -208,15 +208,20 @@ A newline is inserted before and after, if needed."
       (save-excursion
         (goto-char (point-min))
         (let ((in-code-block nil))
-          (while (re-search-forward "^```" nil t)
-            (setq in-code-block (not in-code-block))
-            (if in-code-block
-                (save-excursion
-                  (beginning-of-line)
-                  (when (not (looking-back "\n\n"))
-                    (insert "\n")))
-              (when (not (looking-at "\n\n"))
-                (insert "\n")))))))))
+          (while (< (point) (point-max))
+            (if (looking-at "^```")
+                (progn
+                  (put-text-property (point) (1+ (point)) 'fenced-code-block t)
+                  (setq in-code-block (not in-code-block))
+                  (save-excursion
+                    (if in-code-block
+                        (when (not (looking-back "\n\n"))
+                          (insert "\n"))
+                      (when (not (looking-at "```\n\n"))
+                        (insert "\n")))))
+              (when in-code-block
+                (put-text-property (point) (1+ (point)) 'fenced-code-block t)))
+            (forward-line)))))))
 
 (defun discourse-article-transform-links ()
   "Make Discourse links clickable.
@@ -281,7 +286,10 @@ line, as is typically the case when advancing with
       (save-excursion
         (goto-char (point-min))
         (while (< (point) (point-max))
-          (when (and (not (looking-at "\n*```"))
+          ;; Advancing by paragraphs means point moves to the empty line before
+          ;; each paragraph, so we have to check for the fenced-code-block
+          ;; property at the point + 1 i.e. the beginning of the next line.
+          (when (and (not (get-text-property (1+ (point)) 'fenced-code-block))
                      (= 0 (discourse-article--count-citation-marks)))
             (save-excursion
               (fill-paragraph)))
