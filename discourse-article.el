@@ -213,12 +213,12 @@ A newline is inserted before and after, if needed."
                 (progn
                   (put-text-property (point) (1+ (point)) 'fenced-code-block t)
                   (setq in-code-block (not in-code-block))
-                  (save-excursion
-                    (if in-code-block
-                        (when (not (looking-back "\n\n"))
-                          (insert "\n"))
-                      (when (not (looking-at "```\n\n"))
-                        (insert "\n")))))
+                  (if in-code-block
+                      (when (not (looking-back "\n\n"))
+                        (insert "\n"))
+                    (when (not (looking-at "^```\n\n"))
+                      (end-of-line)
+                      (insert "\n"))))
               (when in-code-block
                 (put-text-property (point) (1+ (point)) 'fenced-code-block t)))
             (forward-line)))))))
