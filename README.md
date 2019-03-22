@@ -11,7 +11,9 @@ Here's how it looks (combined with [nice-citation](https://github.com/damiencoll
 
 ![Prettified Discourse article](images/discourse-article.png?raw=true "Prettified Discourse article")
 
-## Quotes -> citations
+## Treatments
+
+### Quotes -> citations
 
 This treatment is *enabled* by default.
 
@@ -40,7 +42,7 @@ even nicer looking citations. In that case, the Discourse Article treatment must
 This treatment only applies to Discourse e-mails (based on the `From`
 header containing `@discoursemail.com`).
 
-## Code + paragraphs
+### Code + paragraphs
 
 This treatment is *disabled* by default.
 
@@ -55,7 +57,7 @@ Non-code paragraphs are fill-wrapped to `fill-column` columns.
 **NOTE**: If a paragraph contains (non-fenced) code blocks, this will
 likely garble the code, hence its being disabled by default.
 
-## Labeled links
+### Labeled links
 
 This treatment is *enabled* by default.
 
@@ -63,7 +65,7 @@ The Labeled Links treatment transforms Discourse links of the form
 `[label](url)` by keeping only the label highlighted with the `link` face
 and making it clickable. Clicking it follows the specified URL.
 
-## Previous replies
+### Previous replies
 
 This treatment is *enabled* by default.
 
