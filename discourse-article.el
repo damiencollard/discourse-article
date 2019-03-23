@@ -86,6 +86,7 @@ Detection is based on the `From` field matching `@discoursemail.com`."
         (re-search-forward "^From: .*@discoursemail.com" nil t)))))
 
 (defun discourse-article-transform-previous-replies ()
+  "Perform highlighting of the \"Previous Replies\" section."
   (interactive)
   (when (discourse-article--is-discourse)
     (let ((inhibit-read-only t)
@@ -306,9 +307,10 @@ line, as is typically the case when advancing with
 
 (defun discourse-article-transform-paragraphs ()
   "Transform an e-mail's paragraphs.
-Applies `discourse-article-space-out-code-blocks' followed by
-`discourse-article-fill-paragraphs'. Refer to the doc of these
-functions for details."
+Applies `discourse-article-space-out-code-blocks',
+`discourse-article-transform-links' and
+`discourse-article-fill-paragraphs', in that order.
+Refer to the doc of these functions for details."
   (interactive)
   (discourse-article-space-out-code-blocks)
   (discourse-article-transform-links)
