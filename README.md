@@ -112,8 +112,10 @@ treatment too, require it *after* `discourse-article`:
 - The Code + Paragraphs treatment can be enabled by setting `discourse-article-treat-paragraphs` to t.
 - The Previous Replies treatment can be enabled by setting `discourse-article-treat-previous-replies` to t.
 
-- The delimiter strings, the faces for the delimiters, the replies
-  heading and the replies' authors can be customized.
+- The fenced code block's background can be customized.
+- The "Previous Replies" delimiter strings, the faces for the
+  delimiters, the replies heading and the replies' authors can be
+  customized.
 
 All these settings are in group `discourse-article`. The treatment variables are in
 `gnus-article-treat` as well.

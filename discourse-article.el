@@ -71,6 +71,17 @@ Applies to both the beginning and inter-reply delimiters."
   "Face for the replies' authors."
   :group 'discourse-article)
 
+(defface discourse-article-code-background-face
+  '((t (:background "#2e2e2e")))
+  "Face for the background of fenced code blocks."
+  :group 'discourse-article)
+
+(defcustom discourse-article-code-background t
+  "Whether to color the background of fenced code blocks.
+The face is `discourse-article-code-background-face'."
+  :group 'discourse-article
+  :type 'boolean)
+
 ;; TODO: Add variable holding a list of From regexes used to detect whether an e-mail
 ;; is from a Discourse forum?
 
@@ -234,7 +245,11 @@ A newline is inserted before and after, if needed."
                       (end-of-line)
                       (insert "\n"))))
               (if in-code-block
-                  (put-text-property (point) (1+ (point)) 'fenced-code-block t)
+                  (progn
+                    (put-text-property (point) (1+ (point)) 'fenced-code-block t)
+                    (when discourse-article-code-background
+                      (put-text-property (point) (1+ (line-end-position))
+                                         'face 'discourse-article-code-background-face)))
                 ;; Preformatted block? (indented 4 spaces)
                 (when (looking-at "^    ")
                   (put-text-property (point) (1+ (point)) 'preformatted-block t))))
