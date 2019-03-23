@@ -29,6 +29,7 @@
 
 ;;; Code:
 
+(require 'dash)
 (require 'gnus-art)
 (require 'xml)
 
@@ -138,6 +139,17 @@ predicate.  See Info node `(gnus)Customizing Articles' for details."
   :type gnus-article-treat-custom)
 (put 'discourse-article-treat-previous-replies 'highlight t)
 
+(defun discourse-article--find-quote ()
+  (when (re-search-forward "^\\[quote=\"\\([^\"]*\\)\"\\]" nil t)
+    (let ((beg-opening (match-beginning 0))
+          (end-opening  (match-end 0))
+          (meta (match-string 1)))
+      (when (re-search-forward "\\[/quote\\]")
+        (let* ((beg-closing (match-beginning 0))
+               (end-closing (match-end 0))
+               (text (buffer-substring end-opening beg-closing)))
+          `(,beg-opening ,end-closing ,meta ,text))))))
+
 (defun discourse-article-transform-quotes ()
   "Replace Discourse quotes with mail-style citations.
 
@@ -161,31 +173,32 @@ the `nice-citation' treatment, if present."
       (with-silent-modifications
         (save-excursion
           (goto-char (point-min))
-          (while (re-search-forward "^\\[quote=\"\\([^\"]*\\)\"\\]\\([^[]*\\)\\[/quote\\]" nil t)
-            (let* ((beg (match-beginning 0))
-                   (end (match-end 0))
-                   (from (match-string 1))
-                   (text (match-string 2))
-                   (author (progn (string-match "^\\([^,]+\\)," from)
-                                  (match-string 1 from)))
-                   (new-from (concat author " wrote:"))
-                   (new-text (with-temp-buffer
-                               (save-excursion (insert text))
-                               (let ((fill-column article-fill-column))
-                                 (fill-region (point-min) (point-max)))
-                               (save-excursion
-                                 (while (< (point) (point-max))
-                                   (insert "> ")
-                                   (forward-line)))
-                               ;; Discourse quotes may contain HTML entities.
-                               (xml-parse-string))))
-              (delete-region beg end)
-              (goto-char beg)
-              (insert
-               (concat (propertize new-from 'face '(:inherit gnus-cite-1 :slant italic))
-                       "\n"
-                       (propertize new-text 'face 'gnus-cite-1)
-                       "\n")))))))))
+          (catch 'done
+            (while (< (point) (point-max))
+              (-if-let ((beg end meta text) (discourse-article--find-quote))
+                  (let* ((author (progn (string-match "^\\([^,]+\\)," meta)
+                                        (match-string 1 meta)))
+                         (attrib (concat author " wrote:"))
+                         (new-text (with-temp-buffer
+                                     (save-excursion (insert text))
+                                     (let ((fill-column article-fill-column))
+                                       (fill-region (point-min) (point-max)))
+                                     (save-excursion
+                                       (while (< (point) (point-max))
+                                         (insert "> ")
+                                         (forward-line)))
+                                     ;; Discourse quotes may contain HTML entities.
+                                     (or (ignore-errors
+                                           (xml-parse-string))
+                                         (buffer-string)))))
+                    (delete-region beg end)
+                    (goto-char beg)
+                    (insert
+                     (concat (propertize attrib 'face '(:inherit gnus-cite-1 :slant italic))
+                             "\n"
+                             (propertize new-text 'face 'gnus-cite-1)
+                             "\n")))
+                (throw 'done nil)))))))))
 
 (defcustom discourse-article-treat-quotes t
   "Replace Discourse-style quotes with mail-style ones.
