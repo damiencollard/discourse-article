@@ -256,8 +256,7 @@ this treatment should be applied before
                    (make-button beg (point) 'face 'link
                                 'help-echo (concat "Go to " url)
                                 'url url
-                                'action 'discourse-article--follow-link)
-                   )))))))
+                                'action 'discourse-article--follow-link))))))))
 
 (defun discourse-article--follow-link (ovl)
   (let ((url (overlay-get ovl 'url)))
