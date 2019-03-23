@@ -55,12 +55,18 @@ Fenced code blocks, which are delimited by triple backticks (```) are moved
 into separate paragraphs, so as to ease the next treatment: wrapping
 of paragraphs.
 
-Non-code paragraphs are fill-wrapped to `fill-column` columns.
+This treatment also detects preformatted blocks, which are paragraphs
+whose lines all start with 4 spaces. Note that *paragraph* implies a
+blank line before and after -- if that's not the case, it won't be
+considered a preformatted block.
+
+Non-code, non-preformatted paragraphs are fill-wrapped to
+`fill-column` columns.
 
 **NOTE**: Code blocks are not highlighted yet.
 
-**NOTE**: If a paragraph contains (non-fenced) code blocks, this will
-likely garble the code, hence its being disabled by default.
+**NOTE**: If a paragraph contains itemized lists, this will likely
+garble them, hence its being disabled by default.
 
 ### Labeled links
 

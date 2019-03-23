@@ -233,8 +233,11 @@ A newline is inserted before and after, if needed."
                     (when (not (looking-at "^```\n\n"))
                       (end-of-line)
                       (insert "\n"))))
-              (when in-code-block
-                (put-text-property (point) (1+ (point)) 'fenced-code-block t)))
+              (if in-code-block
+                  (put-text-property (point) (1+ (point)) 'fenced-code-block t)
+                ;; Preformatted block? (indented 4 spaces)
+                (when (looking-at "^    ")
+                  (put-text-property (point) (1+ (point)) 'preformatted-block t))))
             (forward-line)))))))
 
 (defun discourse-article-transform-links ()
@@ -302,6 +305,7 @@ line, as is typically the case when advancing with
           (cond
            ((looking-at "^[ \t]*$") (forward-line))
            ((get-text-property (point) 'fenced-code-block) (forward-paragraph))
+           ((get-text-property (point) 'preformatted-block) (forward-paragraph))
            ((< 0 (discourse-article--count-citation-marks)) (forward-paragraph))
            (t (fill-paragraph) (forward-paragraph))))))))
 
