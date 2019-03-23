@@ -286,14 +286,11 @@ line, as is typically the case when advancing with
       (save-excursion
         (goto-char (point-min))
         (while (< (point) (point-max))
-          ;; Advancing by paragraphs means point moves to the empty line before
-          ;; each paragraph, so we have to check for the fenced-code-block
-          ;; property at the point + 1 i.e. the beginning of the next line.
-          (when (and (not (get-text-property (1+ (point)) 'fenced-code-block))
-                     (= 0 (discourse-article--count-citation-marks)))
-            (save-excursion
-              (fill-paragraph)))
-          (forward-paragraph))))))
+          (cond
+           ((looking-at "^[ \t]*$") (forward-line))
+           ((get-text-property (point) 'fenced-code-block) (forward-paragraph))
+           ((< 0 (discourse-article--count-citation-marks)) (forward-paragraph))
+           (t (fill-paragraph) (forward-paragraph))))))))
 
 (defun discourse-article-transform-paragraphs ()
   "Transform an e-mail's paragraphs.
