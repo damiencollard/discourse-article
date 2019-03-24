@@ -234,14 +234,14 @@ A newline is inserted before and after, if needed."
         (goto-char (point-min))
         (let ((in-code-block nil))
           (while (< (point) (point-max))
-            (if (looking-at "^```")
+            (if (looking-at "^[ \t]*```")
                 (progn
                   (put-text-property (point) (1+ (point)) 'fenced-code-block t)
                   (setq in-code-block (not in-code-block))
                   (if in-code-block
                       (when (not (looking-back "\n\n"))
                         (insert "\n"))
-                    (when (not (looking-at "^```\n\n"))
+                    (when (not (looking-at "^[ \t]*```\n\n"))
                       (end-of-line)
                       (insert "\n"))))
               (if in-code-block
