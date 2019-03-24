@@ -42,10 +42,9 @@ and highlights the whole with face `gnus-cite-1`.
 This treatment only applies to Discourse e-mails (based on the `From`
 header containing `@discoursemail.com`).
 
-When used in combination with
-[Nice Citation](https://github.com/damiencollard/nice-citation) (to
-get even nicer looking citations), the Discourse Article treatment
-must appear *before* the Nice Citation treatment -- see Usage below.
+When used in combination with [Nice Citation](https://github.com/damiencollard/nice-citation) (to get even nicer looking
+citations), the Discourse Article treatment must appear *before* the
+Nice Citation treatment -- see Usage below.
 
 ### Code + paragraphs
 
