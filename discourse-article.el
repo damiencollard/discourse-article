@@ -71,6 +71,36 @@ Applies to both the beginning and inter-reply delimiters."
   "Face for the replies' authors."
   :group 'discourse-article)
 
+(defface discourse-article-section-face-1
+  '((t (:inherit markdown-header-face-1)))
+  "Face for titles of level 1 sections."
+  :group 'discourse-article)
+
+(defface discourse-article-section-face-2
+  '((t (:inherit markdown-header-face-2)))
+  "Face for titles of level 2 sections."
+  :group 'discourse-article)
+
+(defface discourse-article-section-face-3
+  '((t (:inherit markdown-header-face-3)))
+  "Face for titles of level 3 sections."
+  :group 'discourse-article)
+
+(defface discourse-article-section-face-4
+  '((t (:inherit markdown-header-face-4)))
+  "Face for titles of level 4 sections."
+  :group 'discourse-article)
+
+(defface discourse-article-section-face-5
+  '((t (:inherit markdown-header-face-5)))
+  "Face for titles of level 5 sections."
+  :group 'discourse-article)
+
+(defface discourse-article-section-face-6
+  '((t (:inherit markdown-header-face-6)))
+  "Face for titles of level 6 sections."
+  :group 'discourse-article)
+
 (defface discourse-article-code-background-face
   '((t (:background "#2e2e2e")))
   "Face for the background of fenced code blocks."
@@ -294,6 +324,21 @@ this treatment should be applied before
   (let ((url (overlay-get ovl 'url)))
     (gnus-button-embedded-url url)))
 
+(defun discourse-article-highlight-sections ()
+  "Highlight the section titles."
+  (when (discourse-article--is-discourse)
+    (with-silent-modifications
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "^\\(#+\\) \\(.*\\)$" nil t)
+          (let* ((beg (match-beginning 0))
+                 (end (match-end 0))
+                 (title (match-string 2))
+                 (level (min 6 (length (match-string 1))))
+                 (face (intern (format "discourse-article-section-face-%d" level))))
+            (delete-region beg end)
+            (insert (propertize title 'face face))))))))
+
 (defun discourse-article--count-citation-marks ()
   "Count citation marks `>` in the current paragraph.
 Assumes it is called right before the paragraph, on an empty
@@ -332,6 +377,7 @@ Applies `discourse-article-space-out-code-blocks',
 Refer to the doc of these functions for details."
   (interactive)
   (discourse-article-space-out-code-blocks)
+  (discourse-article-highlight-sections)
   (discourse-article-transform-links)
   (discourse-article-fill-paragraphs))
 
