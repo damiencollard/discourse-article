@@ -39,6 +39,13 @@
   :group 'gnus-article
   :link '(url-link :tag "GitHub" "https://github.com/damiencollard/discourse-article"))
 
+(defcustom discourse-article-from-regexps '(".*@discoursemail.com")
+  "Regexes matching addresses from which Discourse e-mails are received.
+The Discourse Article treatments are only applied on incoming
+e-mails if their From field matches one of the regexes."
+  :group 'discourse-article
+  :type '(repeat string))
+
 (defcustom discourse-article-replies-beginning-delimiter "━"
   "String used to mark the beginning of previous replies.
 This variable is used by `discourse-article-transform-previous-replies' which can
@@ -112,19 +119,20 @@ The face is `discourse-article-code-background-face'."
   :group 'discourse-article
   :type 'boolean)
 
-;; TODO: Add variable holding a list of From regexes used to detect whether an e-mail
-;; is from a Discourse forum?
-
 (defun discourse-article--is-discourse ()
   "Return whether an e-mail is from a Discourse forum.
-Detection is based on the `From` field matching `@discoursemail.com`."
+Determined by the regexes in `discourse-article-from-regexps'."
   (gnus-with-article-buffer
     (save-excursion
       (save-restriction
         (widen)
         (article-narrow-to-head)
-        ;; XXX: There must be some gnus- or message- function to get the From header?
-        (re-search-forward "^From: .*@discoursemail.com" nil t)))))
+        (gnus-article-goto-header "From")
+        (let ((value (buffer-substring (point) (line-end-position))))
+          (catch 'done
+            (dolist (r discourse-article-from-regexps)
+              (when (string-match r value)
+                (throw 'done t)))))))))
 
 (defun discourse-article-transform-previous-replies ()
   "Perform highlighting of the \"Previous Replies\" section."
