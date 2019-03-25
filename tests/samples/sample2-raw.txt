@@ -1,0 +1,613 @@
+Return-Path: <rust_lang+verp-c697a15c021085255edef9cac60d8fc5@discoursemail.com>
+Delivered-To: xxxx@xxxx.net
+Date: Sat, 23 Mar 2019 17:15:33 +0000
+From: Aaaa via The Rust Programming Language Forum <rust_lang@discoursemail.com>
+Reply-To: The Rust Programming Language Forum <rust_lang+eba70d5f6d08068dd552cb3c56ce16a0@discoursemail.com>
+To: xxxx@xxxx.net
+Message-ID: <topic/26586/102642@users.rust-lang.org>
+In-Reply-To: <topic/26586/102641@users.rust-lang.org>
+References: <topic/26586@users.rust-lang.org>
+ <topic/26586/102641@users.rust-lang.org>
+Subject: [rust-users] [help] Using yaml_rust to parse a simple file
+Mime-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="--==_mimepart_5c9669b5d9cd3_1bd3fd71703d51c17761d3";
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+List-Unsubscribe: <https://users.rust-lang.org/email/unsubscribe/6ca6e731bc4f1e2bed4b879c2c5b21c13e1ef5edf02a1b5e7ac9a9be3a36eb63>
+X-Auto-Response-Suppress: All
+Auto-Submitted: auto-generated
+Precedence: list
+List-ID: The Rust Programming Language Forum | help <help.users.rust-lang.org>
+List-Archive: https://users.rust-lang.org/t/using-yaml-rust-to-parse-a-simple-file/26586
+X-GND-Status: LEGIT
+
+
+----==_mimepart_5c9669b5d9cd3_1bd3fd71703d51c17761d3
+Content-Type: text/plain;
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+
+
+Yes, if you absolutely need to keep the format it may be more complicated.
+I see two approaches
+
+1. When the file struct is free. I start by creating Rust struct that fit my needs then create write function and see how serde serialize. It's a bit a lazy way but it works fine for me
+1. When the file struct is fixed may be I would try to use intermediary struct and convert it to the final struct using Rust Trait to convert a type from to another.
+
+
+
+--
+*Previous Replies*
+I looked into using serde_yaml. I could see that would be very straight forward if the input format mirrored the point struct more closely, like so:
+
+    Point:
+        id: 1
+        x: 1.0
+        y: 2.0
+        z: 3.0
+    Point:
+        id: 2
+        x: 4.0
+        y: 3.0
+        z: 2.0
+    ...
+
+Would serde be beneficial even if I keep the input format as is?
+
+Posted by Dddd on 03/23/2019
+
+To de-serialize a file a good starting point is the lib serde https://serde.rs/
+From doc:
+*Serde is a framework for ***ser*** ializing and ***de*** serializing Rust data structures efficiently and generically.*
+
+*The Serde ecosystem consists of data structures that know how to serialize and deserialize themselves along with data formats that know how to serialize and deserialize other things. Serde provides the layer by which these two groups interact with each other, allowing any supported data structure to be serialized and deserialized using any supported data format.*
+
+So all your tests and errors management would be significantly shorter.
+
+Posted by Aaaa on 03/23/2019
+
+Thanks. Good idea with the expect. I do intend to use Result<T,Error> in the final version. And do proper error handling.
+
+Posted by Dddd on 03/23/2019
+
+If panicking if the way you want to treat the errors, I think `expect()` is something you should look at. That would avoid having so many nested blocks. By the way, following your logic, you should match the result of `as_i64()`. Or use `expect`... :slight_smile:
+
+Posted by Bbbb on 03/23/2019
+
+Hello,
+
+I am new to rust and new to this forum. As a starting learning project I am making a simple CFD solver in rust. I decided to use Yaml for the input file format like this:
+
+    nodes:
+     1: [1.0, 2.0, 3.0]
+     2: [4.0, 3.0, 2.0]
+     3: [5.0, 4.0, 3.0]
+     4: [6.0, 3.0, 2.0]
+
+
+I want to load this into a vector of structs like below:
+
+    [
+        Point {
+            id: 1,
+            x: 1.0,
+            y: 2.0,
+            z: 3.0
+        },
+        Point {
+            id: 2,
+            x: 4.0,
+            y: 3.0,
+            z: 2.0
+        },
+        Point {
+            id: 3,
+            x: 5.0,
+            y: 4.0,
+            z: 3.0
+        },
+        Point {
+            id: 4,
+            x: 6.0,
+            y: 3.0,
+            z: 2.0
+        }
+    ]
+
+
+After much time banging my head against the wall I came up with this working code:
+
+    use yaml_rust::{Yaml, YamlLoader};
+    use yaml_rust::{Yaml, YamlLoader};
+
+    #[derive(Debug)]
+    struct Point {
+        id: i64,
+        x: f64,
+        y: f64,
+        z: f64
+    }
+
+    fn parse_deck(doc: &Yaml) -> Vec<Point> {
+        let mut res = Vec::new();
+        match *doc {
+            Yaml::Hash(ref h) => {
+                for (k, v) in h {
+                    match k.as_str() {
+                        Some("nodes") => match v {
+                            Yaml::Hash(ref g) => {
+                                for (nid, xyz) in g {
+                                    let id = nid.as_i64().unwrap();
+                                    let w = match xyz {
+                                        Yaml::Array(ref v) => v,
+                                        _ => panic!("malformed input file: coordinates should be floating point numbers")
+                                    };
+                                    let t = w.iter().map(|x| x.as_f64().unwrap()).collect::<Vec<f64>>();
+                                    let p = Point {id:id, x:t[0], y:t[1], z:t[2]};
+                                    res.push(p);
+                                }
+                            },
+                            _ => panic!("malformed input file: format should be [node-id, x, y, z]")
+                        },
+                        _ =>  panic!("malformed input file: unsuported section.")
+                    };
+                }
+            }
+            _ => {
+                panic!("malformed input file: top level must be in key: value format");
+            }
+        };
+        res
+    }
+
+
+    fn main() {
+        let s = "
+    nodes:
+     1: [1.0, 2.0, 3.0]
+     2: [4.0, 3.0, 2.0]
+     3: [5.0, 4.0, 3.0]
+     4: [6.0, 3.0, 2.0]
+    ";
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        dbg!(parse_deck(&doc));
+
+    }
+
+
+I am not at all happy with this code. There has got to be a more elegant way of doing this. Can you give me some pointers in the right direction?
+
+EDIT: I streamlined my working example a bit to make it shorter and clearer.
+
+Posted by Dddd on 03/23/2019
+
+
+
+---
+[Visit Topic](https://users.rust-lang.org/t/using-yaml-rust-to-parse-a-simple-file/26586/6) or reply to this email to respond.
+
+You are receiving this because you enabled mailing list mode.
+
+To unsubscribe from these emails, [click here](https://users.rust-lang.org/email/unsubscribe/6ca6e731bc4f1e2bed4b879c2c5b21c13e1ef5edf02a1b5e7ac9a9be3a36eb63).
+
+----==_mimepart_5c9669b5d9cd3_1bd3fd71703d51c17761d3
+Content-Type: text/html;
+ charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<div>=0D
+=0D
+  <div></div>=0D
+=0D
+    <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/Aaaa/45/9976_2.png" title=3D"Aaaa" width=3D"45" hei=
+ght=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/Aaaa" target=3D"_blank"=
+ style=3D"text-decoration: none; font-weight: bold; color: #006699;; font=
+-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-serif;co=
+lor:#006699;text-decoration:none;font-weight:bold">Aaaa</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">=0D
+<p style=3D"margin-top:0; border: 0;">Yes, if you absolutely need to keep=
+ the format it may be more complicated.<br>=0D
+I see two approaches</p>=0D
+<ol>=0D
+<li style=3D"padding-bottom: 10px">When the file struct is free. I start =
+by creating Rust struct that fit my needs then create write function and =
+see how serde serialize. It=E2=80=99s a bit a lazy way but it works fine =
+for me</li>=0D
+<li style=3D"padding-bottom: 10px">When the file struct is fixed may be I=
+ would try to use intermediary struct and convert it to the final struct =
+using Rust Trait to convert a type from to another.</li>=0D
+</ol>=0D
+</div>=0D
+</div>=0D
+=0D
+=0D
+      <div style=3D"color:#666;">=0D
+<hr style=3D"background-color: #ddd; height: 1px; border: 1px;; backgroun=
+d-color: #ddd; height: 1px; border: 1px;">=0D
+<p><a href=3D"https://users.rust-lang.org/t/using-yaml-rust-to-parse-a-si=
+mple-file/26586/6" style=3D"text-decoration: none; font-weight: bold; col=
+or: #006699;; color:#666;">Visit Topic</a> or reply to this email to resp=
+ond.</p>=0D
+</div>=0D
+      <hr style=3D"background-color: #ddd; height: 1px; border: 1px;; bac=
+kground-color: #ddd; height: 1px; border: 1px;">=0D
+=0D
+      <h4 style=3D"color: #222;; font-size: 17px; color: #444; margin-bot=
+tom:10px;">In Reply To</h4>=0D
+      <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/Dddd/45/10717_2.png" title=3D"davidosterber=
+g" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/Dddd" target=3D=
+"_blank" style=3D"text-decoration: none; font-weight: bold; color: #00669=
+9;; font-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-=
+serif;color:#006699;text-decoration:none;font-weight:bold">Dddd=
+</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">I looked into using serde_yaml. I could=
+ see that would be very straight forward if the input format mirrored the=
+ point struct more closely, like so: =0D
+Point:=0D
+    id: 1=0D
+    x: 1.0=0D
+    y: 2.0=0D
+    z: 3.0=0D
+Point:=0D
+    id: 2=0D
+    x: 4.0=0D
+    y: 3.0=0D
+    z: 2.0=0D
+...=0D
+=0D
+Would serde be beneficial even if I keep the =E2=80=A6</div>=0D
+</div>=0D
+=0D
+=0D
+      <h4 style=3D"color: #222;; font-size: 17px; color: #444; margin-bot=
+tom:10px;">Previous Replies</h4>=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/Dddd/45/10717_2.png" title=3D"davidosterber=
+g" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/Dddd" target=3D=
+"_blank" style=3D"text-decoration: none; font-weight: bold; color: #00669=
+9;; font-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-=
+serif;color:#006699;text-decoration:none;font-weight:bold">Dddd=
+</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">=0D
+<p style=3D"margin-top:0; border: 0;">I looked into using serde_yaml. I c=
+ould see that would be very straight forward if the input format mirrored=
+ the point struct more closely, like so:</p>=0D
+<pre style=3D"word-wrap: break-word; max-width: 694px;"><code style=3D"di=
+splay: block; background-color: #f1f1ff; padding: 5px;; background-color:=
+ #f1f1ff; padding: 2px 5px;">Point:=0D
+    id: 1=0D
+    x: 1.0=0D
+    y: 2.0=0D
+    z: 3.0=0D
+Point:=0D
+    id: 2=0D
+    x: 4.0=0D
+    y: 3.0=0D
+    z: 2.0=0D
+...=0D
+</code></pre>=0D
+<p style=3D"margin-top:0; border: 0;">Would serde be beneficial even if I=
+ keep the input format as is?</p>=0D
+</div>=0D
+</div>=0D
+=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/Aaaa/45/9976_2.png" title=3D"Aaaa" width=3D"45" hei=
+ght=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/Aaaa" target=3D"_blank"=
+ style=3D"text-decoration: none; font-weight: bold; color: #006699;; font=
+-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-serif;co=
+lor:#006699;text-decoration:none;font-weight:bold">Aaaa</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">=0D
+<p style=3D"margin-top:0; border: 0;">To de-serialize a file a good start=
+ing point is the lib serde <a href=3D"https://serde.rs/" rel=3D"nofollow =
+noopener" style=3D"text-decoration: none; font-weight: bold; color: #0066=
+99;">https://serde.rs/</a><br>=0D
+From doc:<br>=0D
+<em>Serde is a framework for <em><strong>ser</strong></em> ializing and <=
+em><strong>de</strong></em> serializing Rust data structures efficiently =
+and generically.</em></p>=0D
+<p style=3D"margin-top:0; border: 0;"><em>The Serde ecosystem consists of=
+ data structures that know how to serialize and deserialize themselves al=
+ong with data formats that know how to serialize and deserialize other th=
+ings. Serde provides the layer by which these two groups interact with ea=
+ch other, allowing any supported data structure to be serialized and dese=
+rialized using any supported data format.</em></p>=0D
+<p style=3D"margin-top:0; border: 0;">So all your tests and errors manage=
+ment would be significantly shorter.</p>=0D
+</div>=0D
+</div>=0D
+=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/Dddd/45/10717_2.png" title=3D"davidosterber=
+g" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/Dddd" target=3D=
+"_blank" style=3D"text-decoration: none; font-weight: bold; color: #00669=
+9;; font-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-=
+serif;color:#006699;text-decoration:none;font-weight:bold">Dddd=
+</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;"><p style=3D"margin-top:0; border: 0;">T=
+hanks. Good idea with the expect. I do intend to use Result&lt;T,Error&gt=
+; in the final version. And do proper error handling.</p></div>=0D
+</div>=0D
+=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/Bbbb/45/10254_2.png" title=3D"boastful-s=
+quirrel" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/Bbbb" targe=
+t=3D"_blank" style=3D"text-decoration: none; font-weight: bold; color: #0=
+06699;; font-size:13px;font-family:'lucida grande',tahoma,verdana,arial,s=
+ans-serif;color:#006699;text-decoration:none;font-weight:bold">boastful-s=
+quirrel</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;"><p style=3D"margin-top:0; border: 0;">I=
+f panicking if the way you want to treat the errors, I think <code style=3D=
+"background-color: #f1f1ff; padding: 2px 5px;">expect()</code> is somethi=
+ng you should look at. That would avoid having so many nested blocks. By =
+the way, following your logic, you should match the result of <code style=
+=3D"background-color: #f1f1ff; padding: 2px 5px;">as_i64()</code>. Or use=
+ <code style=3D"background-color: #f1f1ff; padding: 2px 5px;">expect</cod=
+e>=E2=80=A6 <img src=3D"https://discourse-cdn-sjc1.com/business5/images/e=
+moji/twitter/slight_smile.png?v=3D6" title=3D":slight_smile:" alt=3D":sli=
+ght_smile:" height=3D"20" width=3D"20"></p></div>=0D
+</div>=0D
+=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/Dddd/45/10717_2.png" title=3D"davidosterber=
+g" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/Dddd" target=3D=
+"_blank" style=3D"text-decoration: none; font-weight: bold; color: #00669=
+9;; font-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-=
+serif;color:#006699;text-decoration:none;font-weight:bold">Dddd=
+</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">=0D
+<p style=3D"margin-top:0; border: 0;">Hello,</p>=0D
+<p style=3D"margin-top:0; border: 0;">I am new to rust and new to this fo=
+rum. As a starting learning project I am making a simple CFD solver in ru=
+st. I decided to use Yaml for the input file format like this:</p>=0D
+<pre style=3D"word-wrap: break-word; max-width: 694px;"><code style=3D"di=
+splay: block; background-color: #f1f1ff; padding: 5px;; background-color:=
+ #f1f1ff; padding: 2px 5px;">nodes:=0D
+ 1: [1.0, 2.0, 3.0]=0D
+ 2: [4.0, 3.0, 2.0]=0D
+ 3: [5.0, 4.0, 3.0]=0D
+ 4: [6.0, 3.0, 2.0]=0D
+</code></pre>=0D
+<p style=3D"margin-top:0; border: 0;">I want to load this into a vector o=
+f structs like below:</p>=0D
+<pre style=3D"word-wrap: break-word; max-width: 694px;"><code style=3D"di=
+splay: block; background-color: #f1f1ff; padding: 5px;; background-color:=
+ #f1f1ff; padding: 2px 5px;">[=0D
+    Point {=0D
+        id: 1,=0D
+        x: 1.0,=0D
+        y: 2.0,=0D
+        z: 3.0=0D
+    },=0D
+    Point {=0D
+        id: 2,=0D
+        x: 4.0,=0D
+        y: 3.0,=0D
+        z: 2.0=0D
+    },=0D
+    Point {=0D
+        id: 3,=0D
+        x: 5.0,=0D
+        y: 4.0,=0D
+        z: 3.0=0D
+    },=0D
+    Point {=0D
+        id: 4,=0D
+        x: 6.0,=0D
+        y: 3.0,=0D
+        z: 2.0=0D
+    }=0D
+]=0D
+</code></pre>=0D
+<p style=3D"margin-top:0; border: 0;">After much time banging my head aga=
+inst the wall I came up with this working code:</p>=0D
+<pre style=3D"word-wrap: break-word; max-width: 694px;"><code style=3D"di=
+splay: block; background-color: #f1f1ff; padding: 5px;; background-color:=
+ #f1f1ff; padding: 2px 5px;">use yaml_rust::{Yaml, YamlLoader};=0D
+use yaml_rust::{Yaml, YamlLoader};=0D
+=0D
+#[derive(Debug)]=0D
+struct Point {=0D
+    id: i64,=0D
+    x: f64,=0D
+    y: f64,=0D
+    z: f64=0D
+}=0D
+=0D
+fn parse_deck(doc: &amp;Yaml) -&gt; Vec&lt;Point&gt; {=0D
+    let mut res =3D Vec::new();=0D
+    match *doc {=0D
+        Yaml::Hash(ref h) =3D&gt; {=0D
+            for (k, v) in h {=0D
+                match k.as_str() {=0D
+                    Some("nodes") =3D&gt; match v {=0D
+                        Yaml::Hash(ref g) =3D&gt; {=0D
+                            for (nid, xyz) in g {=0D
+                                let id =3D nid.as_i64().unwrap();=0D
+                                let w =3D match xyz {=0D
+                                    Yaml::Array(ref v) =3D&gt; v,=0D
+                                    _ =3D&gt; panic!("malformed input fil=
+e: coordinates should be floating point numbers")=0D
+                                };=0D
+                                let t =3D w.iter().map(|x| x.as_f64().unw=
+rap()).collect::&lt;Vec&lt;f64&gt;&gt;();=0D
+                                let p =3D Point {id:id, x:t[0], y:t[1], z=
+:t[2]};=0D
+                                res.push(p);=0D
+                            }=0D
+                        },=0D
+                        _ =3D&gt; panic!("malformed input file: format sh=
+ould be [node-id, x, y, z]")=0D
+                    },=0D
+                    _ =3D&gt;  panic!("malformed input file: unsuported s=
+ection.")=0D
+                };=0D
+            }=0D
+        }=0D
+        _ =3D&gt; {=0D
+            panic!("malformed input file: top level must be in key: value=
+ format");=0D
+        }=0D
+    };=0D
+    res=0D
+}=0D
+=0D
+=0D
+fn main() {=0D
+    let s =3D "=0D
+nodes:=0D
+ 1: [1.0, 2.0, 3.0]=0D
+ 2: [4.0, 3.0, 2.0]=0D
+ 3: [5.0, 4.0, 3.0]=0D
+ 4: [6.0, 3.0, 2.0]=0D
+";=0D
+    let docs =3D YamlLoader::load_from_str(&amp;s).unwrap();=0D
+    let doc =3D &amp;docs[0];=0D
+    dbg!(parse_deck(&amp;doc));=0D
+=0D
+}=0D
+</code></pre>=0D
+<p style=3D"margin-top:0; border: 0;">I am not at all happy with this cod=
+e. There has got to be a more elegant way of doing this. Can you give me =
+some pointers in the right direction?</p>=0D
+<p style=3D"margin-top:0; border: 0;">EDIT: I streamlined my working exam=
+ple a bit to make it shorter and clearer.</p>=0D
+</div>=0D
+</div>=0D
+=0D
+=0D
+=0D
+  <div style=3D"color:#666;">=0D
+<hr style=3D"background-color: #ddd; height: 1px; border: 1px;; backgroun=
+d-color: #ddd; height: 1px; border: 1px;">=0D
+<p><a href=3D"https://users.rust-lang.org/t/using-yaml-rust-to-parse-a-si=
+mple-file/26586/6" style=3D"text-decoration: none; font-weight: bold; col=
+or: #006699;; background-color: #2F70AC; color: #FFFFFF; border-top: 4px =
+solid #2F70AC; border-right: 6px solid #2F70AC; border-bottom: 4px solid =
+#2F70AC; border-left: 6px solid #2F70AC; display: inline-block; font-weig=
+ht: bold;">Visit Topic</a> or reply to this email to respond.</p>=0D
+</div>=0D
+  <div style=3D"color:#666;">=0D
+<p>You are receiving this because you enabled mailing list mode.</p>=0D
+<p>To unsubscribe from these emails, <a href=3D"https://users.rust-lang.o=
+rg/email/unsubscribe/6ca6e731bc4f1e2bed4b879c2c5b21c13e1ef5edf02a1b5e7ac9=
+a9be3a36eb63" style=3D"text-decoration: none; font-weight: bold; color: #=
+006699;; color:#666;">click here</a>.</p>=0D
+</div>=0D
+=0D
+</div>=0D
+=0D
+<div itemscope itemtype=3D"http://schema.org/EmailMessage" style=3D"displ=
+ay:none">=0D
+  <div itemprop=3D"action" itemscope itemtype=3D"http://schema.org/ViewAc=
+tion">=0D
+    <link itemprop=3D"url" href=3D"https://users.rust-lang.org/t/using-ya=
+ml-rust-to-parse-a-simple-file/26586/6">=0D
+    <meta itemprop=3D"name" content=3D"Read full topic">=0D
+  </div>=0D
+</div>=0D
+
+----==_mimepart_5c9669b5d9cd3_1bd3fd71703d51c17761d3--

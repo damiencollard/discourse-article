@@ -1,0 +1,133 @@
+Return-Path: <rust_lang+verp-237bd6a8a709a2f45b9032c5c00bb5c0@discoursemail.com>
+Delivered-To: dddd@dddd.net
+Date: Sat, 23 Mar 2019 23:39:00 +0000
+From: Aaaa via The Rust Programming Language Forum <rust_lang@discoursemail.com>
+Reply-To: The Rust Programming Language Forum <rust_lang+1c7358bb49520be2362d9405b7adc78e@discoursemail.com>
+To: dddd@dddd.net
+Message-ID: <topic/26576/102683@users.rust-lang.org>
+In-Reply-To: <topic/26576/102672@users.rust-lang.org>
+References: <topic/26576@users.rust-lang.org>
+ <topic/26576/102672@users.rust-lang.org>
+Subject: [rust-users] [help] Beginner: edit variable outside a closure
+Content-Transfer-Encoding: 7bit
+List-Unsubscribe: <https://users.rust-lang.org/email/unsubscribe/a7ad5d508b2612dbacfbd0037cbbde3f70ae2f620382d3513ad53580c94c4a22>
+X-Auto-Response-Suppress: All
+Auto-Submitted: auto-generated
+Precedence: list
+List-ID: The Rust Programming Language Forum | help <help.users.rust-lang.org>
+List-Archive: https://users.rust-lang.org/t/beginner-edit-variable-outside-a-closure/26576
+X-GND-Status: LEGIT
+
+Pppp wrote:
+> I will need a lot of time to understand what you made me do.
+> I have mostly developed in C/C++/C# and for now, I miss a basic theoric understanding of all borrowing and ownership concepts.
+
+Your starting point:
+
+you have a **local** variable `charac_read`
+
+  - the fact it is local is important since, an alternative solution to using `Arc` would have been declaring it global / static with:
+
+    ```rust
+    static charac_read: AtomicBool = AtomicBool::new(false);
+
+    temperature_sensor.on_notification(Box::new(|n: ValueNotification| {
+       println!("{}", String::from_utf8(n.value).unwrap());
+       charac_read.store(true, Ordering::Relaxed);
+    }));
+
+    temperature_sensor.subscribe(temperature_char);
+
+    while charac_read.load(Ordering::Relaxed) == false
+    {
+    }
+    ```
+
+### The problem of borrowing a local variable
+
+Why does the above code or the one with `Arc` work, or in other words, why did the code without both static and arc not work?
+
+Because what the closure was capturing ("implicitly using") was a **shared** reference (_e.g._, `&'a AtomicBool`) to `charac_read`. However, once you spawn a thread (let's call it the "spawnee"), **it may outlive the thread that spawned it!!** (let's call it the spawner). Since the spawnee can outlive the spawner, it is thus able to **witness the spawner returning from its function** (in your example, `main`). So, if the spawnee was allowed to borrow locals from the spawner,  **the spawned closure could be referring to freed data!**
+
+That's why (the closuring describing the behavior of) the spawnee cannot **borrow locals** (if you try to do it, you will get errors saying that the borrowed value does not live long enough, since it must not have a local lifetime `'a` but the infinite lifetime called `'static`).
+
+  - in [`::rumble`](https://docs.rs/rumble)'s case, `on_notification` takes a [`Box<dyn Fn(ValueNotification) + Send + 'static>`]((https://docs.rs/rumble/0.3.0/rumble/api/type.NotificationHandler.html)), so you can "see" the `'static` lifetime requirement at the API level (actually the lifetime annotation is ellided, but when that happens with a **trait object** type definition, `'static` is the lifetime "picked by Rust").
+
+### How to thus avoid borrowing a local variable
+
+  - you may sometimes be able to use a `static` variable (when its initial value can be computed at compile time, such as with the literal `false`);
+
+  - else you must wrap your variable in a [`Arc`](https://doc.rust-lang.org/std/sync/struct.Arc.html) (Atomically Reference-Counted smart pointer, the equivalent of `C++`'s `shared_ptr`) to get **multiple ownership** (only when all the owners have been dropped does the value get deallocated, thus preventing the aforementioned use-after-free problem):
+
+      - to create another owner, you just `.clone()` the smart pointer,
+
+      - to give/send/move the newly created owner to the other thread, the name of the new owner must appear in the body of the closure (as usual) **and the closure must be declared with the `move` keyword before its arguments** (the part between pipes),
+
+  - another overlooked option is to "promote a local to `static`" by leaking it:
+
+     1. [`Box`](https://doc.rust-lang.org/std/boxed/struct.Box.html) your local
+         ```rust
+         let charac_read: Box<AtomicBool> = Box::new(AtomicBool::new(false));
+         ```
+
+     1. [`leak`](https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak) it:
+         ```rust
+         let charac_read: &'static AtomicBool = Box::leak(charac_read);
+         // now you can use `charac_read` in the spawned thread;
+         ```
+
+
+
+--
+*Previous Replies*
+[quote="Pppp, post:14, topic:26576"]
+I have mostly developed in C/C++/C# and for now, I miss a basic theoric understanding of all borrowing and ownership concepts
+[/quote]
+
+No one comes to Rust with an understanding of borrowing and it's implications. That's why Rust has a reputation for being hard to learn.
+
+Posted by Kkkk on 03/23/2019
+
+Nope i hadn't noticed it, so sorry. It compiles right now. Thanks you very much.
+I will need a lot of time to understand what you made me do.
+I have mostly developed in C/C++/C# and for now, I miss a basic theoric understanding of all borrowing and ownership concepts.
+
+Posted by Pppp on 03/23/2019
+
+Just to be sure you put the "move" in Box::new(**move** |
+If it is the case, I really don't know and I'm curious about the answer.
+
+Posted by llll on 03/23/2019
+
+Nope, same error
+
+Posted by Pppp on 03/23/2019
+
+Does this work?
+
+```
+let charac_read = Arc::new(AtomicBool::new(false));
+let clone = charac_read.clone();
+
+temperature_sensor.on_notification(Box::new(move |n: ValueNotification| {
+   println!("{}", String::from_utf8(n.value).unwrap());
+   clone.store(true, Ordering::Relaxed);
+}));
+
+temperature_sensor.subscribe(temperature_char);
+
+while charac_read.load(Ordering::Relaxed) == false
+{
+}
+```
+
+Posted by llll on 03/23/2019
+
+
+
+---
+[Visit Topic](https://users.rust-lang.org/t/beginner-edit-variable-outside-a-closure/26576/16) or reply to this email to respond.
+
+You are receiving this because you enabled mailing list mode.
+
+To unsubscribe from these emails, [click here](https://users.rust-lang.org/email/unsubscribe/a7ad5d508b2612dbacfbd0037cbbde3f70ae2f620382d3513ad53580c94c4a22).

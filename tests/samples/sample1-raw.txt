@@ -1,0 +1,567 @@
+Return-Path: <rust_lang+verp-237bd6a8a709a2f45b9032c5c00bb5c0@discoursemail.com>
+Delivered-To: dddd@dddd.net
+Date: Sat, 23 Mar 2019 23:39:00 +0000
+From: Aaaa via The Rust Programming Language Forum <rust_lang@discoursemail.com>
+Reply-To: The Rust Programming Language Forum <rust_lang+1c7358bb49520be2362d9405b7adc78e@discoursemail.com>
+To: dddd@dddd.net
+Message-ID: <topic/26576/102683@users.rust-lang.org>
+In-Reply-To: <topic/26576/102672@users.rust-lang.org>
+References: <topic/26576@users.rust-lang.org>
+ <topic/26576/102672@users.rust-lang.org>
+Subject: [rust-users] [help] Beginner: edit variable outside a closure
+Mime-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="--==_mimepart_5c96c394c7c40_2bf3fad19943a08219945";
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+List-Unsubscribe: <https://users.rust-lang.org/email/unsubscribe/a7ad5d508b2612dbacfbd0037cbbde3f70ae2f620382d3513ad53580c94c4a22>
+X-Auto-Response-Suppress: All
+Auto-Submitted: auto-generated
+Precedence: list
+List-ID: The Rust Programming Language Forum | help <help.users.rust-lang.org>
+List-Archive: https://users.rust-lang.org/t/beginner-edit-variable-outside-a-closure/26576
+X-GND-Status: LEGIT
+
+
+----==_mimepart_5c96c394c7c40_2bf3fad19943a08219945
+Content-Type: text/plain;
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+
+
+Pppp wrote:
+> I will need a lot of time to understand what you made me do.
+> I have mostly developed in C/C++/C# and for now, I miss a basic theoric understanding of all borrowing and ownership concepts.
+
+Your starting point:
+
+you have a **local** variable `charac_read`
+
+  - the fact it is local is important since, an alternative solution to using `Arc` would have been declaring it global / static with:
+
+    ```rust
+    static charac_read: AtomicBool = AtomicBool::new(false);
+
+    temperature_sensor.on_notification(Box::new(|n: ValueNotification| {
+       println!("{}", String::from_utf8(n.value).unwrap());
+       charac_read.store(true, Ordering::Relaxed);
+    }));
+
+    temperature_sensor.subscribe(temperature_char);
+
+    while charac_read.load(Ordering::Relaxed) == false
+    {
+    }
+    ```
+
+### The problem of borrowing a local variable
+
+Why does the above code or the one with `Arc` work, or in other words, why did the code without both static and arc not work?
+
+Because what the closure was capturing ("implicitly using") was a **shared** reference (_e.g._, `&'a AtomicBool`) to `charac_read`. However, once you spawn a thread (let's call it the "spawnee"), **it may outlive the thread that spawned it!!** (let's call it the spawner). Since the spawnee can outlive the spawner, it is thus able to **witness the spawner returning from its function** (in your example, `main`). So, if the spawnee was allowed to borrow locals from the spawner,  **the spawned closure could be referring to freed data!**
+
+That's why (the closuring describing the behavior of) the spawnee cannot **borrow locals** (if you try to do it, you will get errors saying that the borrowed value does not live long enough, since it must not have a local lifetime `'a` but the infinite lifetime called `'static`).
+
+  - in [`::rumble`](https://docs.rs/rumble)'s case, `on_notification` takes a [`Box<dyn Fn(ValueNotification) + Send + 'static>`]((https://docs.rs/rumble/0.3.0/rumble/api/type.NotificationHandler.html)), so you can "see" the `'static` lifetime requirement at the API level (actually the lifetime annotation is ellided, but when that happens with a **trait object** type definition, `'static` is the lifetime "picked by Rust").
+
+### How to thus avoid borrowing a local variable
+
+  - you may sometimes be able to use a `static` variable (when its initial value can be computed at compile time, such as with the literal `false`);
+
+  - else you must wrap your variable in a [`Arc`](https://doc.rust-lang.org/std/sync/struct.Arc.html) (Atomically Reference-Counted smart pointer, the equivalent of `C++`'s `shared_ptr`) to get **multiple ownership** (only when all the owners have been dropped does the value get deallocated, thus preventing the aforementioned use-after-free problem):
+
+      - to create another owner, you just `.clone()` the smart pointer,
+
+      - to give/send/move the newly created owner to the other thread, the name of the new owner must appear in the body of the closure (as usual) **and the closure must be declared with the `move` keyword before its arguments** (the part between pipes),
+
+  - another overlooked option is to "promote a local to `static`" by leaking it:
+
+     1. [`Box`](https://doc.rust-lang.org/std/boxed/struct.Box.html) your local
+         ```rust
+         let charac_read: Box<AtomicBool> = Box::new(AtomicBool::new(false));
+         ```
+
+     1. [`leak`](https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak) it:
+         ```rust
+         let charac_read: &'static AtomicBool = Box::leak(charac_read);
+         // now you can use `charac_read` in the spawned thread;
+         ```
+
+
+
+--
+*Previous Replies*
+[quote="Pppp, post:14, topic:26576"]
+I have mostly developed in C/C++/C# and for now, I miss a basic theoric understanding of all borrowing and ownership concepts
+[/quote]
+
+No one comes to Rust with an understanding of borrowing and it's implications. That's why Rust has a reputation for being hard to learn.
+
+Posted by Kkkk on 03/23/2019
+
+Nope i hadn't noticed it, so sorry. It compiles right now. Thanks you very much.
+I will need a lot of time to understand what you made me do.
+I have mostly developed in C/C++/C# and for now, I miss a basic theoric understanding of all borrowing and ownership concepts.
+
+Posted by Pppp on 03/23/2019
+
+Just to be sure you put the "move" in Box::new(**move** |
+If it is the case, I really don't know and I'm curious about the answer.
+
+Posted by llll on 03/23/2019
+
+Nope, same error
+
+Posted by Pppp on 03/23/2019
+
+Does this work?
+
+```
+let charac_read = Arc::new(AtomicBool::new(false));
+let clone = charac_read.clone();
+
+temperature_sensor.on_notification(Box::new(move |n: ValueNotification| {
+   println!("{}", String::from_utf8(n.value).unwrap());
+   clone.store(true, Ordering::Relaxed);
+}));
+
+temperature_sensor.subscribe(temperature_char);
+
+while charac_read.load(Ordering::Relaxed) == false
+{
+}
+```
+
+Posted by llll on 03/23/2019
+
+
+
+---
+[Visit Topic](https://users.rust-lang.org/t/beginner-edit-variable-outside-a-closure/26576/16) or reply to this email to respond.
+
+You are receiving this because you enabled mailing list mode.
+
+To unsubscribe from these emails, [click here](https://users.rust-lang.org/email/unsubscribe/a7ad5d508b2612dbacfbd0037cbbde3f70ae2f620382d3513ad53580c94c4a22).
+
+----==_mimepart_5c96c394c7c40_2bf3fad19943a08219945
+Content-Type: text/html;
+ charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<div>=0D
+=0D
+  <div></div>=0D
+=0D
+    <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/yandros/45/8136_2.png" title=3D"Yandros" width=3D"45"=
+ height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/yandros" target=3D"_blan=
+k" style=3D"text-decoration: none; font-weight: bold; color: #006699;; fo=
+nt-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-serif;=
+color:#006699;text-decoration:none;font-weight:bold">Yandros</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">=0D
+<blockquote data-post=3D"14" data-topic=3D"26576" style=3D"border-left: 5=
+px solid #e9e9e9; background-color: #f8f8f8; margin: 0;; padding: 12px 25=
+px 2px 12px; margin-bottom: 10px;">=0D
+=0D
+<img alt width=3D"20" height=3D"20" src=3D"https://avatars.discourse.org/=
+v2/letter/p/e5b9ba/40.png" style=3D"margin-right: 5px; width:20px; height=
+:20px; vertical-align:middle;"> Pppp:=0D
+<p style=3D"padding: 1em;; padding: 0;">I will need a lot of time to unde=
+rstand what you made me do.<br>=0D
+I have mostly developed in C/C++/C# and for now, I miss a basic theoric u=
+nderstanding of all borrowing and ownership concepts.</p>=0D
+</blockquote>=0D
+<p style=3D"margin-top:0; border: 0;">Your starting point:</p>=0D
+<p style=3D"margin-top:0; border: 0;">you have a <strong>local</strong> v=
+ariable <code style=3D"background-color: #f1f1ff; padding: 2px 5px;">char=
+ac_read</code></p>=0D
+<ul style=3D"margin: 0 0 0 10px; padding: 0 0 0 20px;">=0D
+<li style=3D"padding-bottom: 10px">=0D
+<p style=3D"margin-top:0; border: 0;">the fact it is local is important s=
+ince, an alternative solution to using <code style=3D"background-color: #=
+f1f1ff; padding: 2px 5px;">Arc</code> would have been declaring it global=
+ / static with:</p>=0D
+<pre style=3D"word-wrap: break-word; max-width: 694px;"><code style=3D"di=
+splay: block; background-color: #f1f1ff; padding: 5px;; background-color:=
+ #f1f1ff; padding: 2px 5px;">static charac_read: AtomicBool =3D AtomicBoo=
+l::new(false);=0D
+=0D
+temperature_sensor.on_notification(Box::new(|n: ValueNotification| {=0D
+   println!("{}", String::from_utf8(n.value).unwrap());=0D
+   charac_read.store(true, Ordering::Relaxed);=0D
+}));=0D
+=0D
+temperature_sensor.subscribe(temperature_char);=0D
+=0D
+while charac_read.load(Ordering::Relaxed) =3D=3D false=0D
+{=0D
+}=0D
+</code></pre>=0D
+</li>=0D
+</ul>=0D
+<h3 style=3D"margin: 15px 0 20px 0;">The problem of borrowing a local var=
+iable</h3>=0D
+<p style=3D"margin-top:0; border: 0;">Why does the above code or the one =
+with <code style=3D"background-color: #f1f1ff; padding: 2px 5px;">Arc</co=
+de> work, or in other words, why did the code without both static and arc=
+ not work?</p>=0D
+<p style=3D"margin-top:0; border: 0;">Because what the closure was captur=
+ing (=E2=80=9Cimplicitly using=E2=80=9D) was a <strong>shared</strong> re=
+ference (<em>e.g.</em>, <code style=3D"background-color: #f1f1ff; padding=
+: 2px 5px;">&amp;'a AtomicBool</code>) to <code style=3D"background-color=
+: #f1f1ff; padding: 2px 5px;">charac_read</code>. However, once you spawn=
+ a thread (let=E2=80=99s call it the =E2=80=9Cspawnee=E2=80=9D), <strong>=
+it may outlive the thread that spawned it!!</strong> (let=E2=80=99s call =
+it the spawner). Since the spawnee can outlive the spawner, it is thus ab=
+le to <strong>witness the spawner returning from its function</strong> (i=
+n your example, <code style=3D"background-color: #f1f1ff; padding: 2px 5p=
+x;">main</code>). So, if the spawnee was allowed to borrow locals from th=
+e spawner,  <strong>the spawned closure could be referring to freed data!=
+</strong></p>=0D
+<p style=3D"margin-top:0; border: 0;">That=E2=80=99s why (the closuring d=
+escribing the behavior of) the spawnee cannot <strong>borrow locals</stro=
+ng> (if you try to do it, you will get errors saying that the borrowed va=
+lue does not live long enough, since it must not have a local lifetime <c=
+ode style=3D"background-color: #f1f1ff; padding: 2px 5px;">'a</code> but =
+the infinite lifetime called <code style=3D"background-color: #f1f1ff; pa=
+dding: 2px 5px;">'static</code>).</p>=0D
+<ul style=3D"margin: 0 0 0 10px; padding: 0 0 0 20px;">=0D
+<li style=3D"padding-bottom: 10px">in <a href=3D"https://docs.rs/rumble" =
+rel=3D"nofollow noopener" style=3D"text-decoration: none; font-weight: bo=
+ld; color: #006699;"><code style=3D"background-color: #f1f1ff; padding: 2=
+px 5px;">::rumble</code></a>'s case, <code style=3D"background-color: #f1=
+f1ff; padding: 2px 5px;">on_notification</code> takes a <a href=3D"https:=
+//users.rust-lang.org" style=3D"text-decoration: none; font-weight: bold;=
+ color: #006699;"><code style=3D"background-color: #f1f1ff; padding: 2px =
+5px;">Box&lt;dyn Fn(ValueNotification) + Send + 'static&gt;</code></a>, s=
+o you can =E2=80=9Csee=E2=80=9D the <code style=3D"background-color: #f1f=
+1ff; padding: 2px 5px;">'static</code> lifetime requirement at the API le=
+vel (actually the lifetime annotation is ellided, but when that happens w=
+ith a <strong>trait object</strong> type definition, <code style=3D"backg=
+round-color: #f1f1ff; padding: 2px 5px;">'static</code> is the lifetime =E2=
+=80=9Cpicked by Rust=E2=80=9D).</li>=0D
+</ul>=0D
+<h3 style=3D"margin: 15px 0 20px 0;">How to thus avoid borrowing a local =
+variable</h3>=0D
+<ul style=3D"margin: 0 0 0 10px; padding: 0 0 0 20px;">=0D
+<li style=3D"padding-bottom: 10px">=0D
+<p style=3D"margin-top:0; border: 0;">you may sometimes be able to use a =
+<code style=3D"background-color: #f1f1ff; padding: 2px 5px;">static</code=
+> variable (when its initial value can be computed at compile time, such =
+as with the literal <code style=3D"background-color: #f1f1ff; padding: 2p=
+x 5px;">false</code>);</p>=0D
+</li>=0D
+<li style=3D"padding-bottom: 10px">=0D
+<p style=3D"margin-top:0; border: 0;">else you must wrap your variable in=
+ a <a href=3D"https://doc.rust-lang.org/std/sync/struct.Arc.html" style=3D=
+"text-decoration: none; font-weight: bold; color: #006699;"><code style=3D=
+"background-color: #f1f1ff; padding: 2px 5px;">Arc</code></a> (Atomically=
+ Reference-Counted smart pointer, the equivalent of <code style=3D"backgr=
+ound-color: #f1f1ff; padding: 2px 5px;">C++</code>'s <code style=3D"backg=
+round-color: #f1f1ff; padding: 2px 5px;">shared_ptr</code>) to get <stron=
+g>multiple ownership</strong> (only when all the owners have been dropped=
+ does the value get deallocated, thus preventing the aforementioned use-a=
+fter-free problem):</p>=0D
+<ul style=3D"margin: 0 0 0 10px; padding: 0 0 0 20px;">=0D
+<li style=3D"padding-bottom: 10px">=0D
+<p style=3D"margin-top:0; border: 0;">to create another owner, you just <=
+code style=3D"background-color: #f1f1ff; padding: 2px 5px;">.clone()</cod=
+e> the smart pointer,</p>=0D
+</li>=0D
+<li style=3D"padding-bottom: 10px">=0D
+<p style=3D"margin-top:0; border: 0;">to give/send/move the newly created=
+ owner to the other thread, the name of the new owner must appear in the =
+body of the closure (as usual) <strong>and the closure must be declared w=
+ith the <code style=3D"background-color: #f1f1ff; padding: 2px 5px;">move=
+</code> keyword before its arguments</strong> (the part between pipes),</=
+p>=0D
+</li>=0D
+</ul>=0D
+</li>=0D
+<li style=3D"padding-bottom: 10px">=0D
+<p style=3D"margin-top:0; border: 0;">another overlooked option is to "pr=
+omote a local to <code style=3D"background-color: #f1f1ff; padding: 2px 5=
+px;">static</code>" by leaking it:</p>=0D
+<ol>=0D
+<li style=3D"padding-bottom: 10px">=0D
+<p style=3D"margin-top:0; border: 0;"><a href=3D"https://doc.rust-lang.or=
+g/std/boxed/struct.Box.html" style=3D"text-decoration: none; font-weight:=
+ bold; color: #006699;"><code style=3D"background-color: #f1f1ff; padding=
+: 2px 5px;">Box</code></a> your local</p>=0D
+<pre style=3D"word-wrap: break-word; max-width: 694px;"><code style=3D"di=
+splay: block; background-color: #f1f1ff; padding: 5px;; background-color:=
+ #f1f1ff; padding: 2px 5px;">let charac_read: Box&lt;AtomicBool&gt; =3D B=
+ox::new(AtomicBool::new(false));=0D
+</code></pre>=0D
+</li>=0D
+<li style=3D"padding-bottom: 10px">=0D
+<p style=3D"margin-top:0; border: 0;"><a href=3D"https://doc.rust-lang.or=
+g/std/boxed/struct.Box.html#method.leak" style=3D"text-decoration: none; =
+font-weight: bold; color: #006699;"><code style=3D"background-color: #f1f=
+1ff; padding: 2px 5px;">leak</code></a> it:</p>=0D
+<pre style=3D"word-wrap: break-word; max-width: 694px;"><code style=3D"di=
+splay: block; background-color: #f1f1ff; padding: 5px;; background-color:=
+ #f1f1ff; padding: 2px 5px;">let charac_read: &amp;'static AtomicBool =3D=
+ Box::leak(charac_read);=0D
+// now you can use `charac_read` in the spawned thread;=0D
+</code></pre>=0D
+</li>=0D
+</ol>=0D
+</li>=0D
+</ul>=0D
+</div>=0D
+</div>=0D
+=0D
+=0D
+      <div style=3D"color:#666;">=0D
+<hr style=3D"background-color: #ddd; height: 1px; border: 1px;; backgroun=
+d-color: #ddd; height: 1px; border: 1px;">=0D
+<p><a href=3D"https://users.rust-lang.org/t/beginner-edit-variable-outsid=
+e-a-closure/26576/16" style=3D"text-decoration: none; font-weight: bold; =
+color: #006699;; color:#666;">Visit Topic</a> or reply to this email to r=
+espond.</p>=0D
+</div>=0D
+      <hr style=3D"background-color: #ddd; height: 1px; border: 1px;; bac=
+kground-color: #ddd; height: 1px; border: 1px;">=0D
+=0D
+      <h4 style=3D"color: #222;; font-size: 17px; color: #444; margin-bot=
+tom:10px;">In Reply To</h4>=0D
+      <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://avatars.discourse.org/v2/letter/p/e5b9ba/45.p=
+ng" title=3D"Pppp" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/peseur" target=3D"_blank=
+" style=3D"text-decoration: none; font-weight: bold; color: #006699;; fon=
+t-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-serif;c=
+olor:#006699;text-decoration:none;font-weight:bold">Pppp</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">Nope i hadn=E2=80=99t noticed it, so so=
+rry. It compiles right now. Thanks you very much. =0D
+I will need a lot of time to understand what you made me do. =0D
+I have mostly developed in C/C++/C# and for now, I miss a basic theoric u=
+nderstanding of all borrowing and ownership concepts.</div>=0D
+</div>=0D
+=0D
+=0D
+      <h4 style=3D"color: #222;; font-size: 17px; color: #444; margin-bot=
+tom:10px;">Previous Replies</h4>=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/Kkkk/45/8795_2.png" title=3D"Kkkk=
+" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/Kkkk" target=3D=
+"_blank" style=3D"text-decoration: none; font-weight: bold; color: #00669=
+9;; font-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-=
+serif;color:#006699;text-decoration:none;font-weight:bold">Kkkk=
+</a>=0D
+          <span style=3D"font-size:13px;font-family:'lucida grande',tahom=
+a,verdana,arial,sans-serif;text-decoration:none;margin-left:7px;color: #9=
+99;">Regular</span>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">=0D
+<blockquote data-post=3D"14" data-topic=3D"26576" style=3D"border-left: 5=
+px solid #e9e9e9; background-color: #f8f8f8; margin: 0;; padding: 12px 25=
+px 2px 12px; margin-bottom: 10px;">=0D
+=0D
+<img alt width=3D"20" height=3D"20" src=3D"https://avatars.discourse.org/=
+v2/letter/p/e5b9ba/40.png" style=3D"margin-right: 5px; width:20px; height=
+:20px; vertical-align:middle;"> Pppp:=0D
+<p style=3D"padding: 1em;; padding: 0;">I have mostly developed in C/C++/=
+C# and for now, I miss a basic theoric understanding of all borrowing and=
+ ownership concepts</p>=0D
+</blockquote>=0D
+<p style=3D"margin-top:0; border: 0;">No one comes to Rust with an unders=
+tanding of borrowing and it=E2=80=99s implications. That=E2=80=99s why Ru=
+st has a reputation for being hard to learn.</p>=0D
+</div>=0D
+</div>=0D
+=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://avatars.discourse.org/v2/letter/p/e5b9ba/45.p=
+ng" title=3D"Pppp" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/peseur" target=3D"_blank=
+" style=3D"text-decoration: none; font-weight: bold; color: #006699;; fon=
+t-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-serif;c=
+olor:#006699;text-decoration:none;font-weight:bold">Pppp</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;"><p style=3D"margin-top:0; border: 0;">N=
+ope i hadn=E2=80=99t noticed it, so sorry. It compiles right now. Thanks =
+you very much.<br>=0D
+I will need a lot of time to understand what you made me do.<br>=0D
+I have mostly developed in C/C++/C# and for now, I miss a basic theoric u=
+nderstanding of all borrowing and ownership concepts.</p></div>=0D
+</div>=0D
+=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/llll/45/10514_2.png" title=3D"llll" width=3D"45" he=
+ight=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/llll" target=3D"_blank"=
+ style=3D"text-decoration: none; font-weight: bold; color: #006699;; font=
+-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-serif;co=
+lor:#006699;text-decoration:none;font-weight:bold">llll</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;"><p style=3D"margin-top:0; border: 0;">J=
+ust to be sure you put the =E2=80=9Cmove=E2=80=9D in Box::new(<strong>mov=
+e</strong> |<br>=0D
+If it is the case, I really don=E2=80=99t know and I=E2=80=99m curious ab=
+out the answer.</p></div>=0D
+</div>=0D
+=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://avatars.discourse.org/v2/letter/p/e5b9ba/45.p=
+ng" title=3D"Pppp" width=3D"45" height=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/peseur" target=3D"_blank=
+" style=3D"text-decoration: none; font-weight: bold; color: #006699;; fon=
+t-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-serif;c=
+olor:#006699;text-decoration:none;font-weight:bold">Pppp</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;"><p style=3D"margin-top:0; border: 0;">N=
+ope, same error</p></div>=0D
+</div>=0D
+=0D
+        <div style=3D"margin-bottom:25px;">=0D
+  <table cellspacing=3D"0" cellpadding=3D"0" border=3D"0">=0D
+    <tr>=0D
+      <td style=3D"vertical-align:top;width:55px;">=0D
+        <img src=3D"https://discourse-cdn-sjc1.com/business5/user_avatar/=
+users.rust-lang.org/llll/45/10514_2.png" title=3D"llll" width=3D"45" he=
+ight=3D"45">=0D
+      </td>=0D
+      <td>=0D
+        <a href=3D"https://users.rust-lang.org/u/llll" target=3D"_blank"=
+ style=3D"text-decoration: none; font-weight: bold; color: #006699;; font=
+-size:13px;font-family:'lucida grande',tahoma,verdana,arial,sans-serif;co=
+lor:#006699;text-decoration:none;font-weight:bold">llll</a>=0D
+        <br>=0D
+        <span style=3D"text-align:right;color:#999999;padding-right:5px;f=
+ont-family:'lucida grande',tahoma,verdana,arial,sans-serif;font-size:11px=
+">March 23</span>=0D
+      </td>=0D
+    </tr>=0D
+  </table>=0D
+  <div style=3D"padding-top:5px;">=0D
+<p style=3D"margin-top:0; border: 0;">Does this work?</p>=0D
+<pre style=3D"word-wrap: break-word; max-width: 694px;"><code style=3D"di=
+splay: block; background-color: #f1f1ff; padding: 5px;; background-color:=
+ #f1f1ff; padding: 2px 5px;">let charac_read =3D Arc::new(AtomicBool::new=
+(false));=0D
+let clone =3D charac_read.clone();=0D
+=0D
+temperature_sensor.on_notification(Box::new(move |n: ValueNotification| {=
+=0D
+   println!("{}", String::from_utf8(n.value).unwrap());=0D
+   clone.store(true, Ordering::Relaxed);=0D
+}));=0D
+=0D
+temperature_sensor.subscribe(temperature_char);=0D
+=0D
+while charac_read.load(Ordering::Relaxed) =3D=3D false=0D
+{=0D
+}=0D
+</code></pre>=0D
+</div>=0D
+</div>=0D
+=0D
+=0D
+=0D
+  <div style=3D"color:#666;">=0D
+<hr style=3D"background-color: #ddd; height: 1px; border: 1px;; backgroun=
+d-color: #ddd; height: 1px; border: 1px;">=0D
+<p><a href=3D"https://users.rust-lang.org/t/beginner-edit-variable-outsid=
+e-a-closure/26576/16" style=3D"text-decoration: none; font-weight: bold; =
+color: #006699;; background-color: #2F70AC; color: #FFFFFF; border-top: 4=
+px solid #2F70AC; border-right: 6px solid #2F70AC; border-bottom: 4px sol=
+id #2F70AC; border-left: 6px solid #2F70AC; display: inline-block; font-w=
+eight: bold;">Visit Topic</a> or reply to this email to respond.</p>=0D
+</div>=0D
+  <div style=3D"color:#666;">=0D
+<p>You are receiving this because you enabled mailing list mode.</p>=0D
+<p>To unsubscribe from these emails, <a href=3D"https://users.rust-lang.o=
+rg/email/unsubscribe/a7ad5d508b2612dbacfbd0037cbbde3f70ae2f620382d3513ad5=
+3580c94c4a22" style=3D"text-decoration: none; font-weight: bold; color: #=
+006699;; color:#666;">click here</a>.</p>=0D
+</div>=0D
+=0D
+</div>=0D
+=0D
+<div itemscope itemtype=3D"http://schema.org/EmailMessage" style=3D"displ=
+ay:none">=0D
+  <div itemprop=3D"action" itemscope itemtype=3D"http://schema.org/ViewAc=
+tion">=0D
+    <link itemprop=3D"url" href=3D"https://users.rust-lang.org/t/beginner=
+-edit-variable-outside-a-closure/26576/16">=0D
+    <meta itemprop=3D"name" content=3D"Read full topic">=0D
+  </div>=0D
+</div>=0D
+
+----==_mimepart_5c96c394c7c40_2bf3fad19943a08219945--

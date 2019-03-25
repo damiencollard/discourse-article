@@ -1,0 +1,182 @@
+Return-Path: <rust_lang+verp-c697a15c021085255edef9cac60d8fc5@discoursemail.com>
+Delivered-To: xxxx@xxxx.net
+Date: Sat, 23 Mar 2019 17:15:33 +0000
+From: Aaaa via The Rust Programming Language Forum <rust_lang@discoursemail.com>
+Reply-To: The Rust Programming Language Forum <rust_lang+eba70d5f6d08068dd552cb3c56ce16a0@discoursemail.com>
+To: xxxx@xxxx.net
+Message-ID: <topic/26586/102642@users.rust-lang.org>
+In-Reply-To: <topic/26586/102641@users.rust-lang.org>
+References: <topic/26586@users.rust-lang.org>
+ <topic/26586/102641@users.rust-lang.org>
+Subject: [rust-users] [help] Using yaml_rust to parse a simple file
+Content-Transfer-Encoding: 7bit
+List-Unsubscribe: <https://users.rust-lang.org/email/unsubscribe/6ca6e731bc4f1e2bed4b879c2c5b21c13e1ef5edf02a1b5e7ac9a9be3a36eb63>
+X-Auto-Response-Suppress: All
+Auto-Submitted: auto-generated
+Precedence: list
+List-ID: The Rust Programming Language Forum | help <help.users.rust-lang.org>
+List-Archive: https://users.rust-lang.org/t/using-yaml-rust-to-parse-a-simple-file/26586
+X-GND-Status: LEGIT
+
+Yes, if you absolutely need to keep the format it may be more complicated.
+I see two approaches
+
+1. When the file struct is free. I start by creating Rust struct that fit my needs then create write function and see how serde serialize. It's a bit a lazy way but it works fine for me
+1. When the file struct is fixed may be I would try to use intermediary struct and convert it to the final struct using Rust Trait to convert a type from to another.
+
+
+
+--
+*Previous Replies*
+I looked into using serde_yaml. I could see that would be very straight forward if the input format mirrored the point struct more closely, like so:
+
+    Point:
+        id: 1
+        x: 1.0
+        y: 2.0
+        z: 3.0
+    Point:
+        id: 2
+        x: 4.0
+        y: 3.0
+        z: 2.0
+    ...
+
+Would serde be beneficial even if I keep the input format as is?
+
+Posted by Dddd on 03/23/2019
+
+To de-serialize a file a good starting point is the lib serde https://serde.rs/
+From doc:
+*Serde is a framework for ***ser*** ializing and ***de*** serializing Rust data structures efficiently and generically.*
+
+*The Serde ecosystem consists of data structures that know how to serialize and deserialize themselves along with data formats that know how to serialize and deserialize other things. Serde provides the layer by which these two groups interact with each other, allowing any supported data structure to be serialized and deserialized using any supported data format.*
+
+So all your tests and errors management would be significantly shorter.
+
+Posted by Aaaa on 03/23/2019
+
+Thanks. Good idea with the expect. I do intend to use Result<T,Error> in the final version. And do proper error handling.
+
+Posted by Dddd on 03/23/2019
+
+If panicking if the way you want to treat the errors, I think `expect()` is something you should look at. That would avoid having so many nested blocks. By the way, following your logic, you should match the result of `as_i64()`. Or use `expect`... :slight_smile:
+
+Posted by Bbbb on 03/23/2019
+
+Hello,
+
+I am new to rust and new to this forum. As a starting learning project I am making a simple CFD solver in rust. I decided to use Yaml for the input file format like this:
+
+    nodes:
+     1: [1.0, 2.0, 3.0]
+     2: [4.0, 3.0, 2.0]
+     3: [5.0, 4.0, 3.0]
+     4: [6.0, 3.0, 2.0]
+
+
+I want to load this into a vector of structs like below:
+
+    [
+        Point {
+            id: 1,
+            x: 1.0,
+            y: 2.0,
+            z: 3.0
+        },
+        Point {
+            id: 2,
+            x: 4.0,
+            y: 3.0,
+            z: 2.0
+        },
+        Point {
+            id: 3,
+            x: 5.0,
+            y: 4.0,
+            z: 3.0
+        },
+        Point {
+            id: 4,
+            x: 6.0,
+            y: 3.0,
+            z: 2.0
+        }
+    ]
+
+
+After much time banging my head against the wall I came up with this working code:
+
+    use yaml_rust::{Yaml, YamlLoader};
+    use yaml_rust::{Yaml, YamlLoader};
+
+    #[derive(Debug)]
+    struct Point {
+        id: i64,
+        x: f64,
+        y: f64,
+        z: f64
+    }
+
+    fn parse_deck(doc: &Yaml) -> Vec<Point> {
+        let mut res = Vec::new();
+        match *doc {
+            Yaml::Hash(ref h) => {
+                for (k, v) in h {
+                    match k.as_str() {
+                        Some("nodes") => match v {
+                            Yaml::Hash(ref g) => {
+                                for (nid, xyz) in g {
+                                    let id = nid.as_i64().unwrap();
+                                    let w = match xyz {
+                                        Yaml::Array(ref v) => v,
+                                        _ => panic!("malformed input file: coordinates should be floating point numbers")
+                                    };
+                                    let t = w.iter().map(|x| x.as_f64().unwrap()).collect::<Vec<f64>>();
+                                    let p = Point {id:id, x:t[0], y:t[1], z:t[2]};
+                                    res.push(p);
+                                }
+                            },
+                            _ => panic!("malformed input file: format should be [node-id, x, y, z]")
+                        },
+                        _ =>  panic!("malformed input file: unsuported section.")
+                    };
+                }
+            }
+            _ => {
+                panic!("malformed input file: top level must be in key: value format");
+            }
+        };
+        res
+    }
+
+
+    fn main() {
+        let s = "
+    nodes:
+     1: [1.0, 2.0, 3.0]
+     2: [4.0, 3.0, 2.0]
+     3: [5.0, 4.0, 3.0]
+     4: [6.0, 3.0, 2.0]
+    ";
+        let docs = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &docs[0];
+        dbg!(parse_deck(&doc));
+
+    }
+
+
+I am not at all happy with this code. There has got to be a more elegant way of doing this. Can you give me some pointers in the right direction?
+
+EDIT: I streamlined my working example a bit to make it shorter and clearer.
+
+Posted by Dddd on 03/23/2019
+
+
+
+---
+[Visit Topic](https://users.rust-lang.org/t/using-yaml-rust-to-parse-a-simple-file/26586/6) or reply to this email to respond.
+
+You are receiving this because you enabled mailing list mode.
+
+To unsubscribe from these emails, [click here](https://users.rust-lang.org/email/unsubscribe/6ca6e731bc4f1e2bed4b879c2c5b21c13e1ef5edf02a1b5e7ac9a9be3a36eb63).
