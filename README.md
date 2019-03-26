@@ -40,7 +40,8 @@ regular e-mail citation format as follows:
 and highlights the whole with face `gnus-cite-1`.
 
 This treatment only applies to Discourse e-mails (based on the `From`
-header containing `@discoursemail.com`).
+header matching one of the customizable regexes in
+`discourse-article-from-regexps`, see Customization further down).
 
 When used in combination with [Nice Citation](https://github.com/damiencollard/nice-citation) (to get even nicer looking
 citations), the Discourse Article treatment must appear *before* the
@@ -106,6 +107,12 @@ treatment too, require it *after* `discourse-article`:
 ```
 
 ## Customization
+
+- `discourse-article` only applies its treatments to articles coming
+  from Discourse forums. This is determined using regexes in
+  customizable variable `discourse-article-from-regexps`: if the
+  `From` header of an article matches any of its regexes, the article
+  is deemed to be a Discourse article.
 
 - The Quotes treatment can be disabled by setting `discourse-article-treat-quotes` to nil.
 - The Code + Paragraphs treatment can be enabled by setting `discourse-article-treat-paragraphs` to t.
