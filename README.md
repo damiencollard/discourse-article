@@ -1,10 +1,9 @@
 # Discourse  articles for Gnus
 
-Treatment of Discourse e-mails. There are actually 2 independent treatments:
+Treatment of Discourse e-mails. There are actually 3 independent treatments:
 
 - Quotes
-- Code + Paragraphs
-- Labeled Links
+- Code + Paragraphs + Labeled Links
 - Previous Replies.
 
 Here's how it looks:
