@@ -119,6 +119,11 @@ The face is `discourse-article-code-background-face'."
   :group 'discourse-article
   :type 'boolean)
 
+(defface discourse-article-user-face
+  '((t (:foreground "pink")))
+  "Face for Discourse users mentioned as @user."
+  :group 'discourse-article)
+
 (defun discourse-article--is-discourse ()
   "Return whether an e-mail is from a Discourse forum.
 Determined by the regexes in `discourse-article-from-regexps'."
@@ -323,6 +328,8 @@ this treatment should be applied before
                    (insert (propertize cleaned-label 'face 'link 'url url))
                    ;; FIXME: Fix "widget-tabable-at: Wrong type argument: consp, #<overlay ...>"
                    ;; when TAB'ing to the button and clicking on it (RET does work, though).
+                   ;; Apparently this is raised by `widget-tabable-at' when it calls
+                   ;; `(widget-get widget :tab-order)`.
                    (make-button beg (point) 'face 'link
                                 'help-echo (concat "Go to " url)
                                 'url url
@@ -331,6 +338,24 @@ this treatment should be applied before
 (defun discourse-article--follow-link (ovl)
   (let ((url (overlay-get ovl 'url)))
     (gnus-button-embedded-url url)))
+
+(defun discourse-article-transform-users ()
+  "Make user names clickable."
+  (interactive)
+  (when (discourse-article--is-discourse)
+    (with-silent-modifications
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "@\\([^ \t'\"]+\\)" nil t)
+          (let* ((beg (match-beginning 0))
+                 (end (match-end 0))
+                 (user (match-string 0))
+                 (user-name (match-string 1))
+                 (url (concat "https://users.rust-lang.org/u/" user-name)))
+      (make-button beg (point) 'face 'discourse-article-user-face
+                         'help-echo (concat "Go to profile of user " user-name)
+                         'url url
+                         'action 'discourse-article--follow-link)))))))
 
 (defun discourse-article-highlight-sections ()
   "Highlight the section titles."
@@ -387,6 +412,7 @@ Refer to the doc of these functions for details."
   (discourse-article-space-out-code-blocks)
   (discourse-article-highlight-sections)
   (discourse-article-transform-links)
+  (discourse-article-transform-users)
   (discourse-article-fill-paragraphs))
 
 (defcustom discourse-article-treat-paragraphs nil

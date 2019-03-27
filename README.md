@@ -3,7 +3,7 @@
 Treatment of Discourse e-mails. There are actually 3 independent treatments:
 
 - Quotes
-- Code + Paragraphs + Labeled Links
+- Code + Paragraphs + Labeled Links + Users
 - Previous Replies.
 
 Here's how it looks:
@@ -13,6 +13,10 @@ Standard | With treatment
 ![Standard](images/discourse-article-before.png?raw=true "Standard")  | ![After](images/discourse-article-after.png?raw=true "With discourse-article")
 
 And it looks even better combined with [Nice Citation](https://github.com/damiencollard/nice-citation): [screenshot](images/discourse-article-after-with-nice-citation.png).
+
+**Note**: The default highlighting assumes a dark theme. If your theme is
+light, you'll certainly need to customize the faces in group
+`discourse-article`.
 
 ## Treatments
 
@@ -67,13 +71,16 @@ Non-code, non-preformatted paragraphs are fill-wrapped to
 **NOTE**: If a paragraph contains itemized lists, this will likely
 garble them, hence its being disabled by default.
 
-### Labeled links
+### Labeled links and Users
 
 This treatment is *enabled* by default.
 
-The Labeled Links treatment transforms Discourse links of the form
-`[label](url)` by keeping only the label highlighted with the `link` face
-and making it clickable. Clicking it follows the specified URL.
+It transforms Discourse links of the form `[label](url)` by keeping only
+the label highlighted with the `link` face and making it
+clickable. Clicking it follows the specified URL.
+
+It also adds a link to a user's profile when it encounters a user name
+in the form `@user`. The
 
 ### Previous replies
 
@@ -84,7 +91,8 @@ replies at the bottom of each e-mail you receive, then this treatment,
 if not perfect, improves readability quite a bit.
 
 It adds separators between replies and highlights the names of the
-replies' authors.
+replies' authors. The face used to highlight the user names can be
+customized with `discourse-article-user-face`.
 
 ## Installation
 
