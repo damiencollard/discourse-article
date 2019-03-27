@@ -347,15 +347,17 @@ this treatment should be applied before
       (save-excursion
         (goto-char (point-min))
         (while (re-search-forward "@\\([^ \t'\"]+\\)" nil t)
-          (let* ((beg (match-beginning 0))
-                 (end (match-end 0))
-                 (user (match-string 0))
-                 (user-name (match-string 1))
-                 (url (concat "https://users.rust-lang.org/u/" user-name)))
-      (make-button beg (point) 'face 'discourse-article-user-face
-                         'help-echo (concat "Go to profile of user " user-name)
-                         'url url
-                         'action 'discourse-article--follow-link)))))))
+          ;; Only apply apply the transformation outside fenced code blocks.
+          (when (not (get-text-property (line-beginning-position) 'fenced-code-block))
+            (let* ((beg (match-beginning 0))
+                   (end (match-end 0))
+                   (user (match-string 0))
+                   (user-name (match-string 1))
+                   (url (concat "https://users.rust-lang.org/u/" user-name)))
+              (make-button beg (point) 'face 'discourse-article-user-face
+                           'help-echo (concat "Go to profile of user " user-name)
+                           'url url
+                           'action 'discourse-article--follow-link))))))))
 
 (defun discourse-article-highlight-sections ()
   "Highlight the section titles."
