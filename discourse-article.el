@@ -346,8 +346,8 @@ this treatment should be applied before
     (with-silent-modifications
       (save-excursion
         (goto-char (point-min))
-        (while (re-search-forward "@\\([^ \t'\"]+\\)" nil t)
-          ;; Only apply apply the transformation outside fenced code blocks.
+        (while (re-search-forward "@\\([a-zA-Z0-9._-]+[a-zA-Z0-9_-]\\)" nil t)
+          ;; Only apply the transformation outside fenced code blocks.
           (when (not (get-text-property (line-beginning-position) 'fenced-code-block))
             (let* ((beg (match-beginning 0))
                    (user (match-string 0))
