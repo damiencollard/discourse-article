@@ -136,3 +136,6 @@ All these settings are in group `discourse-article`. The treatment variables are
 ## TODO
 
 - Highlighting of code blocks (with `polymode`?).
+- Until the `upload://` links in plain text are fixed [^1], write hack to replace the `upload://` URLs with the actual URLs to the asset
+
+[^1]: Bug https://meta.discourse.org/t/mailing-list-mode-upload-links-broken-in-e-mails/112354
