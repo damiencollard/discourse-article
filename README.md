@@ -80,7 +80,7 @@ the label highlighted with the `link` face and making it
 clickable. Clicking it follows the specified URL.
 
 It also adds a link to a user's profile when it encounters a user name
-in the form `@user`. The
+in the form `@user`.
 
 ### Previous replies
 
