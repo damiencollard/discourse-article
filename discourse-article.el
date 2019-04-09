@@ -339,8 +339,26 @@ this treatment should be applied before
   (let ((url (overlay-get ovl 'url)))
     (gnus-button-embedded-url url)))
 
-(defun discourse-article-transform-users ()
-  "Make user names clickable."
+;; XXX: This should use the `Message-ID` header to find out the base URL of the
+;; Discourse forum a mail originates from, but I haven't found an easy way to
+;; access this header when not all headers are displayed (which is the default).
+;;
+;; So instead the trick is to find the very last link in the e-mail, which is meant
+;; for unsubscription and does contain the base URL. It's brittle but it works...
+(defun discourse-article--forum-url ()
+  "Return the URL of the Discourse forum an e-mail originates from."
+  (gnus-with-article-buffer
+    (save-excursion
+      (goto-char (point-max))
+      (let ((limit (save-excursion
+                     (forward-line -1)
+                     (line-beginning-position))))
+        (when (looking-back "(\\(https://[^/]+\\)/.+).[[:space:]]*" limit)
+          (match-string 1))))))
+
+(defun discourse-article-transform-users (forum-url)
+  "Make user names clickable.
+The URL to the user profile is constructed based on FORUM-URL."
   (interactive)
   (when (discourse-article--is-discourse)
     (with-silent-modifications
@@ -352,7 +370,7 @@ this treatment should be applied before
             (let* ((beg (match-beginning 0))
                    (user (match-string 0))
                    (user-name (match-string 1))
-                   (url (concat "https://users.rust-lang.org/u/" user-name)))
+                   (url (concat forum-url "/u/" user-name)))
               (make-button beg (point) 'face 'discourse-article-user-face
                            'help-echo (concat "Go to profile of user " user-name)
                            'url url
@@ -410,11 +428,12 @@ Applies `discourse-article-space-out-code-blocks',
 `discourse-article-fill-paragraphs', in that order.
 Refer to the doc of these functions for details."
   (interactive)
-  (discourse-article-space-out-code-blocks)
-  (discourse-article-highlight-sections)
-  (discourse-article-transform-links)
-  (discourse-article-transform-users)
-  (discourse-article-fill-paragraphs))
+  (let ((forum-url (discourse-article--forum-url)))
+    (discourse-article-space-out-code-blocks)
+    (discourse-article-highlight-sections)
+    (discourse-article-transform-links)
+    (discourse-article-transform-users forum-url)
+    (discourse-article-fill-paragraphs)))
 
 (defcustom discourse-article-treat-paragraphs nil
   "Fill-wrap paragraphs except the fenced code block ones and the citations.
