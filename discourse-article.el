@@ -359,7 +359,6 @@ this treatment should be applied before
 (defun discourse-article-transform-users (forum-url)
   "Make user names clickable.
 The URL to the user profile is constructed based on FORUM-URL."
-  (interactive)
   (when (discourse-article--is-discourse)
     (with-silent-modifications
       (save-excursion
