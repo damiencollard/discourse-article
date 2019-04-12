@@ -54,9 +54,8 @@ Nice Citation treatment -- see Usage below.
 
 This treatment is *disabled* by default.
 
-Fenced code blocks, which are delimited by triple backticks (```) are moved
-into separate paragraphs, so as to ease the next treatment: wrapping
-of paragraphs.
+Fenced code blocks, which are delimited by triple backticks (```) are
+moved into separate paragraphs and syntax-highlighted by default.
 
 This treatment also detects preformatted blocks, which are paragraphs
 whose lines all start with 4 spaces. Note that *paragraph* implies a
@@ -117,25 +116,27 @@ treatment too, require it *after* `discourse-article`:
 
 - `discourse-article` only applies its treatments to articles coming
   from Discourse forums. This is determined using regexes in
-  customizable variable `discourse-article-from-regexps`: if the
-  `From` header of an article matches any of its regexes, the article
-  is deemed to be a Discourse article.
+  customizable variable `discourse-article-from-regexps`: if the `From`
+  header of an article matches any of these regexes, the article is
+  deemed to be a Discourse article.
 
 - The Quotes treatment can be disabled by setting `discourse-article-treat-quotes` to nil.
 - The Code + Paragraphs treatment can be enabled by setting `discourse-article-treat-paragraphs` to t.
 - The Previous Replies treatment can be enabled by setting `discourse-article-treat-previous-replies` to t.
 
-- The fenced code block's background can be customized.
+- The syntax highlighting of code blocks can be disabled.
+- ~~The fenced code block's background can be customized.~~ Temporarily
+  disabled until its combination with syntax highlighting is resolved.
 - The "Previous Replies" delimiter strings, the faces for the
   delimiters, the replies heading and the replies' authors can be
   customized.
 
-All these settings are in group `discourse-article`. The treatment variables are in
-`gnus-article-treat` as well.
+All these settings are in group `discourse-article`. The treatment
+variables are present in `gnus-article-treat` as well.
 
 ## TODO
 
-- Highlighting of code blocks (with `polymode`?).
-- Until the `upload://` links in plain text are fixed [^1], write hack to replace the `upload://` URLs with the actual URLs to the asset
+- Until the `upload://` links in plain text are fixed [^1], write hack to
+  replace the `upload://` URLs with the actual URLs to the asset
 
 [^1]: Bug https://meta.discourse.org/t/mailing-list-mode-upload-links-broken-in-e-mails/112354

@@ -4,9 +4,9 @@
 
 ;; Author: Damien Collard <damien.collard@laposte.net>
 ;; URL:
-;; Version: 0.0.2
+;; Version: 0.0.3
 ;; Keywords: gnus mail convenience
-;; Package-Requires: ((emacs "24.3") (gnus "5.13"))
+;; Package-Requires: ((emacs "24.3") (dash "2.12.0") (gnus "5.13") (markdown-mode "2.3"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -32,6 +32,7 @@
 (require 'dash)
 (require 'gnus-art)
 (require 'xml)
+(require 'markdown-mode)
 
 (defgroup discourse-article nil
   "Treatments for Discourse articles."
@@ -45,6 +46,12 @@ The Discourse Article treatments are only applied on incoming
 e-mails if their From field matches one of the regexes."
   :group 'discourse-article
   :type '(repeat string))
+
+(defcustom discourse-article-highlight-code-blocks t
+  "Whether to apply syntax highlighting to the code blocks.
+When enabled, the highlighting is performed via `markdown-mode'."
+  :group 'discourse-article
+  :type 'boolean)
 
 (defcustom discourse-article-replies-beginning-delimiter "━"
   "String used to mark the beginning of previous replies.
@@ -265,34 +272,52 @@ predicate.  See Info node `(gnus)Customizing Articles' for details."
   :type gnus-article-treat-custom)
 (put 'discourse-article-treat-quotes 'highlight t)
 
-(defun discourse-article-space-out-code-blocks ()
+(defun discourse-article--make-code-block-separator (&optional lang)
+  (let ((label (if (> (length lang) 0)
+                   (concat " " lang " ")
+                 "")))
+    (concat (propertize (make-string 3 ?•) 'face '(:foreground "#464646"))
+            (propertize label 'face '(:foreground "#868686"))
+            (propertize (make-string (- fill-column 3 (length label)) ?•) 'face '(:foreground "#464646")))))
+
+(defun discourse-article-transform-code-blocks ()
   "Ensure fenced code blocks are separate paragraphs.
 Fenced code blocks are delimited by triple backticks.
 A newline is inserted before and after, if needed."
   (interactive)
   (when (discourse-article--is-discourse)
-    ;; Space out the code blocks.
     (with-silent-modifications
       (save-excursion
         (goto-char (point-min))
-        (let ((in-code-block nil))
+        (let (lang block-beg)
           (while (< (point) (point-max))
-            (if (looking-at "^[ \t]*```")
+            (if block-beg ;; Inside a block?
                 (progn
                   (put-text-property (point) (1+ (point)) 'fenced-code-block t)
-                  (setq in-code-block (not in-code-block))
-                  (if in-code-block
-                      (when (not (looking-back "\n\n"))
-                        (insert "\n"))
+                  ;; (when discourse-article-code-background
+                  ;;   (put-text-property (point) (1+ (line-end-position))
+                  ;;                      'face 'discourse-article-code-background-face))
+                  ;; At end of block?
+                  (when (looking-at "^[ \t]*```")
+                    (when discourse-article-highlight-code-blocks
+                      (put-text-property (match-beginning 0) (match-end 0)
+                                       'display (discourse-article--make-code-block-separator))
+                      (markdown-fontify-code-block-natively lang block-beg (point)))
+                    (setq block-beg nil)
                     (when (not (looking-at "^[ \t]*```\n\n"))
                       (end-of-line)
                       (insert "\n"))))
-              (if in-code-block
+              ;; At beginning of fenced code bloc?
+              (if (looking-at "^[ \t]*```[ \t]*\\([^[:space:]]*\\)")
                   (progn
+                    (setq lang (match-string 1))
+                    (when discourse-article-highlight-code-blocks
+                      (put-text-property (match-beginning 0) (match-end 0)
+                                         'display (discourse-article--make-code-block-separator lang)))
                     (put-text-property (point) (1+ (point)) 'fenced-code-block t)
-                    (when discourse-article-code-background
-                      (put-text-property (point) (1+ (line-end-position))
-                                         'face 'discourse-article-code-background-face)))
+                    (when (not (looking-back "\n\n"))
+                      (insert "\n"))
+                    (setq block-beg (save-excursion (forward-line) (line-beginning-position))))
                 ;; Preformatted block? (indented 4 spaces)
                 (when (looking-at "^    ")
                   (put-text-property (point) (1+ (point)) 'preformatted-block t))))
@@ -421,14 +446,10 @@ line, as is typically the case when advancing with
            (t (fill-paragraph) (forward-paragraph))))))))
 
 (defun discourse-article-transform-paragraphs ()
-  "Transform an e-mail's paragraphs.
-Applies `discourse-article-space-out-code-blocks',
-`discourse-article-transform-links' and
-`discourse-article-fill-paragraphs', in that order.
-Refer to the doc of these functions for details."
+  "Apply several transformations to an e-mail's paragraphs."
   (interactive)
   (let ((forum-url (discourse-article--forum-url)))
-    (discourse-article-space-out-code-blocks)
+    (discourse-article-transform-code-blocks)
     (discourse-article-highlight-sections)
     (discourse-article-transform-links)
     (discourse-article-transform-users forum-url)
