@@ -4,9 +4,9 @@
 
 ;; Author: Damien Collard <damien.collard@laposte.net>
 ;; URL:
-;; Version: 0.0.2
+;; Version: 0.0.3
 ;; Keywords: gnus mail convenience
-;; Package-Requires: ((emacs "24.3") (gnus "5.13"))
+;; Package-Requires: ((emacs "24.3") (dash "2.12.0") (gnus "5.13") (markdown-mode "2.3"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -32,6 +32,7 @@
 (require 'dash)
 (require 'gnus-art)
 (require 'xml)
+(require 'markdown-mode)
 
 (defgroup discourse-article nil
   "Treatments for Discourse articles."
@@ -46,18 +47,28 @@ e-mails if their From field matches one of the regexes."
   :group 'discourse-article
   :type '(repeat string))
 
+(defcustom discourse-article-fill-paragraphs nil
+  "Whether to fill paragraphs.
+Paragraphs are filled to the column specified by `fill-column`.
+This is disabled by default as currently it will mess up itemized
+lists."
+  :group 'discourse-article
+  :type 'boolean)
+
+(defcustom discourse-article-highlight-code-blocks t
+  "Whether to apply syntax highlighting to the code blocks.
+When enabled, the highlighting is performed by `markdown-mode'."
+  :group 'discourse-article
+  :type 'boolean)
+
 (defcustom discourse-article-replies-beginning-delimiter "━"
-  "String used to mark the beginning of previous replies.
-This variable is used by `discourse-article-transform-previous-replies' which can
-be controlled by `discourse-article-treat-previous-replies'."
+  "String used to mark the beginning of previous replies."
   :group 'discourse-article
   :type '(choice (item :tag "None" :value nil)
 		 string))
 
 (defcustom discourse-article-inter-reply-delimiter "─"
-  "String used to separate replies.
-This variable is used by `discourse-article-transform-previous-replies' which can
-be controlled by `discourse-article-treat-previous-replies'."
+  "String used to separate replies."
   :group 'discourse-article
   :type '(choice (item :tag "None" :value nil)
 		 string))
@@ -108,16 +119,16 @@ Applies to both the beginning and inter-reply delimiters."
   "Face for titles of level 6 sections."
   :group 'discourse-article)
 
-(defface discourse-article-code-background-face
-  '((t (:background "#2e2e2e")))
-  "Face for the background of fenced code blocks."
-  :group 'discourse-article)
+;; (defface discourse-article-code-background-face
+;;   '((t (:background "#2e2e2e")))
+;;   "Face for the background of fenced code blocks."
+;;   :group 'discourse-article)
 
-(defcustom discourse-article-code-background t
-  "Whether to color the background of fenced code blocks.
-The face is `discourse-article-code-background-face'."
-  :group 'discourse-article
-  :type 'boolean)
+;; (defcustom discourse-article-code-background t
+;;   "Whether to color the background of fenced code blocks.
+;; The face is `discourse-article-code-background-face'."
+;;   :group 'discourse-article
+;;   :type 'boolean)
 
 (defface discourse-article-user-face
   '((t (:foreground "pink")))
@@ -180,20 +191,6 @@ Determined by the regexes in `discourse-article-from-regexps'."
 	(setq str (concat str delim)))
       (substring str 0 max))))
 
-(defcustom discourse-article-treat-previous-replies nil
-  "Treat the previous replies included in the Discourse e-mail.
-
-No need to enable this treatment if your Discourse settings don't include
-previous replies at the bottom of each e-mail.
-
-Valid values are nil, t, `head', `first', `last', an integer or a
-predicate.  See Info node `(gnus)Customizing Articles' for details."
-  :group 'discourse-article
-  :group 'gnus-article-treat
-  :link '(custom-manual "(gnus)Customizing Articles")
-  :type gnus-article-treat-custom)
-(put 'discourse-article-treat-previous-replies 'highlight t)
-
 (defun discourse-article--find-quote ()
   (when (re-search-forward "^\\[quote=\"\\([^\"]*\\)\"\\]" nil t)
     (let ((beg-opening (match-beginning 0))
@@ -255,44 +252,52 @@ the `nice-citation' treatment, if present."
                              "\n")))
                 (throw 'done nil)))))))))
 
-(defcustom discourse-article-treat-quotes t
-  "Replace Discourse-style quotes with mail-style ones.
-Valid values are nil, t, `head', `first', `last', an integer or a
-predicate.  See Info node `(gnus)Customizing Articles' for details."
-  :group 'discourse-article
-  :group 'gnus-article-treat
-  :link '(custom-manual "(gnus)Customizing Articles")
-  :type gnus-article-treat-custom)
-(put 'discourse-article-treat-quotes 'highlight t)
+(defun discourse-article--make-code-block-separator (&optional lang)
+  (let ((label (if (> (length lang) 0)
+                   (concat " " lang " ")
+                 "")))
+    (concat (propertize (make-string 3 ?•) 'face '(:foreground "#464646"))
+            (propertize label 'face '(:foreground "#868686"))
+            (propertize (make-string (- fill-column 3 (length label)) ?•) 'face '(:foreground "#464646")))))
 
-(defun discourse-article-space-out-code-blocks ()
+(defun discourse-article-transform-code-blocks ()
   "Ensure fenced code blocks are separate paragraphs.
 Fenced code blocks are delimited by triple backticks.
 A newline is inserted before and after, if needed."
   (interactive)
   (when (discourse-article--is-discourse)
-    ;; Space out the code blocks.
     (with-silent-modifications
       (save-excursion
         (goto-char (point-min))
-        (let ((in-code-block nil))
+        (let (lang block-beg)
           (while (< (point) (point-max))
-            (if (looking-at "^[ \t]*```")
+            (if block-beg ;; Inside a block?
                 (progn
                   (put-text-property (point) (1+ (point)) 'fenced-code-block t)
-                  (setq in-code-block (not in-code-block))
-                  (if in-code-block
-                      (when (not (looking-back "\n\n"))
-                        (insert "\n"))
+                  ;; (when discourse-article-code-background
+                  ;;   (put-text-property (point) (1+ (line-end-position))
+                  ;;                      'face 'discourse-article-code-background-face))
+                  ;; At end of block?
+                  (when (looking-at "^[ \t]*```")
+                    (when discourse-article-highlight-code-blocks
+                      (put-text-property (match-beginning 0) (match-end 0)
+                                       'display (discourse-article--make-code-block-separator))
+                      (markdown-fontify-code-block-natively lang block-beg (point)))
+                    (setq block-beg nil)
                     (when (not (looking-at "^[ \t]*```\n\n"))
                       (end-of-line)
                       (insert "\n"))))
-              (if in-code-block
+              ;; At beginning of fenced code bloc?
+              (if (looking-at "^[ \t]*```[ \t]*\\([^[:space:]]*\\)")
                   (progn
+                    (setq lang (match-string 1))
+                    (when discourse-article-highlight-code-blocks
+                      (put-text-property (match-beginning 0) (match-end 0)
+                                         'display (discourse-article--make-code-block-separator lang)))
                     (put-text-property (point) (1+ (point)) 'fenced-code-block t)
-                    (when discourse-article-code-background
-                      (put-text-property (point) (1+ (line-end-position))
-                                         'face 'discourse-article-code-background-face)))
+                    (when (not (looking-back "\n\n"))
+                      (insert "\n"))
+                    (setq block-beg (save-excursion (forward-line) (line-beginning-position))))
                 ;; Preformatted block? (indented 4 spaces)
                 (when (looking-at "^    ")
                   (put-text-property (point) (1+ (point)) 'preformatted-block t))))
@@ -311,7 +316,7 @@ link to URL.
 
 As a consequence, the paragraph may need to be re-filled. Hence
 this treatment should be applied before
-`discourse-article-fill-paragraphs'."
+`discourse-article-do-fill-paragraphs'."
        (interactive)
        (when (discourse-article--is-discourse)
          (let ((inhibit-read-only t))
@@ -405,7 +410,7 @@ line, as is typically the case when advancing with
         (forward-line)))
     count))
 
-(defun discourse-article-fill-paragraphs ()
+(defun discourse-article-do-fill-paragraphs ()
   "Fill all paragraphs except the fenced code blocks and the citations."
   (interactive)
   (when (discourse-article--is-discourse)
@@ -421,27 +426,36 @@ line, as is typically the case when advancing with
            (t (fill-paragraph) (forward-paragraph))))))))
 
 (defun discourse-article-transform-paragraphs ()
-  "Transform an e-mail's paragraphs.
-Applies `discourse-article-space-out-code-blocks',
-`discourse-article-transform-links' and
-`discourse-article-fill-paragraphs', in that order.
-Refer to the doc of these functions for details."
+  "Apply several transformations to an e-mail's paragraphs."
   (interactive)
   (let ((forum-url (discourse-article--forum-url)))
-    (discourse-article-space-out-code-blocks)
+    (discourse-article-transform-code-blocks)
     (discourse-article-highlight-sections)
     (discourse-article-transform-links)
     (discourse-article-transform-users forum-url)
-    (discourse-article-fill-paragraphs)))
+    (when discourse-article-fill-paragraphs
+      (discourse-article-do-fill-paragraphs))))
 
-(defcustom discourse-article-treat-paragraphs nil
-  "Fill-wrap paragraphs except the fenced code block ones and the citations.
+(defun discourse-article-transform-article ()
+  ;; The transformations *must* appear in the following order: transform
+  ;; previous replies, transform quotes, and then transform paragraphs.
+  (discourse-article-transform-previous-replies)
+  (discourse-article-transform-quotes)
+  (discourse-article-transform-paragraphs))
 
-This is *experimental* and may break paragraph formatting, in particular if
-they contain non-fenced code, so it's off by default.
+(defcustom discourse-article-treat-articles nil
+  "Treat articles coming from Discourse forums.
 
-Note that when enabled, the treatment is only performed on e-mails detected as
-coming from a Discourse forum (see `discourse-article--is-discourse').
+The treatment transforms Discourse's BB-style quotes into regular
+mail citation form, prettifies existing links, adds links to user
+profiles on @user mentions, and highlights code blocks.
+
+The treatment is customizable with `M-x customize-group
+discourse-article`.
+
+Note that when enabled, the treatment is only performed on
+e-mails detected as coming from a Discourse forum (see
+`discourse-article--is-discourse').
 
 Valid values are nil, t, `head', `first', `last', an integer or a
 predicate.  See Info node `(gnus)Customizing Articles' for details."
@@ -449,21 +463,13 @@ predicate.  See Info node `(gnus)Customizing Articles' for details."
   :group 'gnus-article-treat
   :link '(custom-manual "(gnus)Customizing Articles")
   :type gnus-article-treat-custom)
-(put 'discourse-article-treat-paragraphs 'highlight t)
+(put 'discourse-article-treat-articles 'highlight t)
 
-;; IMPORTANT:
-;;
-;; - The Discourse treatments *must* appear in the following order: transform
-;;   previous replies, transform quotes, and then transform paragraphs.
-;;
-;; - These treatments *must* also appear *before* the `nice-citation'
-;;   treatment, if present (as otherwise, `nice-citation' would run before the
-;;   Discourse quotes treatment and thus would leave these quotes
-;;   un-prettified).
+;; IMPORTANT: This treatment *must* appear *before* the `nice-citation'
+;; treatment, if present (as otherwise, `nice-citation' would run before the
+;; Discourse quotes treatment and thus would leave these quotes un-prettified).
 (nconc gnus-treatment-function-alist
-       '((discourse-article-treat-previous-replies discourse-article-transform-previous-replies)
-         (discourse-article-treat-quotes discourse-article-transform-quotes)
-         (discourse-article-treat-paragraphs discourse-article-transform-paragraphs)))
+       '((discourse-article-treat-articles discourse-article-transform-article)))
 
 (provide 'discourse-article)
 ;;; discourse-article.el ends here
