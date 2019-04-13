@@ -109,6 +109,9 @@ Emacs' `load-path`.
 
 ## Usage
 
+Simply require the module in your Emacs initialization file (Typically
+`~/.emacs` or `~/.emacs.d/init.el`):
+
 ```lisp
 (require 'discourse-article)
 ```
