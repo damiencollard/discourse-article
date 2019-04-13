@@ -23,6 +23,12 @@ Before | After
 :-----:|:-------------:
 ![Before](images/code-block-before.png?raw=true "Before") | ![After](images/code-block-after.png?raw=true "After")
 
+<center>
+Another code example:
+<p>
+<img src="images/code-block-another-example.png?raw=true" width="50%">
+</center>
+
 **Note**: The default highlighting assumes a dark theme. If your theme is
 light, you'll certainly need to customize the faces in group
 `discourse-article`.
