@@ -47,11 +47,6 @@ e-mails if their From field matches one of the regexes."
   :group 'discourse-article
   :type '(repeat string))
 
-<<<<<<< HEAD
-(defcustom discourse-article-highlight-code-blocks t
-  "Whether to apply syntax highlighting to the code blocks.
-When enabled, the highlighting is performed via `markdown-mode'."
-=======
 (defcustom discourse-article-fill-paragraphs nil
   "Whether to fill paragraphs.
 Paragraphs are filled to the column specified by `fill-column`.
@@ -62,8 +57,7 @@ lists."
 
 (defcustom discourse-article-highlight-code-blocks t
   "Whether to apply syntax highlighting to the code blocks.
-When enabled, the highlighting is performed by `markdown-mode'."
->>>>>>> split-paragraph-treatments
+When enabled, the highlighting is performed via `markdown-mode'."
   :group 'discourse-article
   :type 'boolean)
 
@@ -266,7 +260,6 @@ the `nice-citation' treatment, if present."
             (propertize label 'face '(:foreground "#868686"))
             (propertize (make-string (- fill-column 3 (length label)) ?•) 'face '(:foreground "#464646")))))
 
-<<<<<<< HEAD
 (defun discourse-article--make-code-block-separator (&optional lang)
   (let ((label (if (> (length lang) 0)
                    (concat " " lang " ")
@@ -275,8 +268,6 @@ the `nice-citation' treatment, if present."
             (propertize label 'face '(:foreground "#868686"))
             (propertize (make-string (- fill-column 3 (length label)) ?•) 'face '(:foreground "#464646")))))
 
-=======
->>>>>>> split-paragraph-treatments
 (defun discourse-article-transform-code-blocks ()
   "Ensure fenced code blocks are separate paragraphs.
 Fenced code blocks are delimited by triple backticks.
